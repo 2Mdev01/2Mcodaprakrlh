@@ -1,19 +1,22 @@
--- SHAKA Hub Premium - Menu Completo
+-- SHAKA Hub Premium - Menu Avançado
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+local Camera = workspace.CurrentCamera
 
 -- Configurações
 local SHAKA_CONFIG = {
     NOME = "SHAKA",
-    VERSAO = "v2.0 Premium",
+    VERSAO = "v3.0 Premium",
     COR_ROXO = Color3.fromRGB(128, 0, 128),
     COR_ROXO_CLARO = Color3.fromRGB(160, 50, 160),
-    COR_PRETO = Color3.fromRGB(20, 20, 20),
-    COR_PRETO_CLARO = Color3.fromRGB(40, 40, 40)
+    COR_ROXO_ESCURO = Color3.fromRGB(80, 0, 80),
+    COR_PRETO = Color3.fromRGB(15, 15, 15),
+    COR_PRETO_CLARO = Color3.fromRGB(30, 30, 30),
+    COR_CINZA = Color3.fromRGB(50, 50, 50)
 }
 
 -- Variáveis globais
@@ -23,8 +26,20 @@ local ESP_Objects = {}
 local SelectedPlayer = nil
 local FlyEnabled = false
 local NoclipEnabled = false
+local InfJumpEnabled = false
+local SpeedEnabled = false
+local InvisEnabled = false
+local MenuVisible = true
+local Dragging = false
+local DragStart = nil
+local MenuPosition = UDim2.new(0.02, 0, 0.02, 0)
 
--- Função para criar elementos com animação
+-- Sistema de logging
+local function Log(mensagem)
+    print("🟣 [SHAKA] " .. mensagem)
+end
+
+-- Função para criar elementos com estilo
 local function CriarElemento(tipo, propriedades)
     local elemento = Instance.new(tipo)
     for prop, valor in pairs(propriedades) do
@@ -33,293 +48,348 @@ local function CriarElemento(tipo, propriedades)
     return elemento
 end
 
--- Sistema de logging
-local function Log(mensagem)
-    print("🟣 [SHAKA] " .. mensagem)
-end
-
--- Função para criar animação suave
-local function AnimacaoSuave(elemento, propriedade, valorFinal, duracao)
+-- Animação suave
+local function AnimacaoSuave(elemento, propriedades, duracao)
     local tweenInfo = TweenInfo.new(duracao, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    local tween = TweenService:Create(elemento, tweenInfo, {[propriedade] = valorFinal})
+    local tween = TweenService:Create(elemento, tweenInfo, propriedades)
     tween:Play()
     return tween
 end
 
--- Criar GUI principal
+-- Criar GUI moderna
 local function CriarGUI()
-    -- Remover GUI existente
     if GUI then
         GUI:Destroy()
         GUI = nil
     end
 
-    -- Criar GUI principal
+    -- GUI Principal
     GUI = CriarElemento("ScreenGui", {
         Name = "SHAKAHub",
         Parent = LocalPlayer:WaitForChild("PlayerGui"),
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     })
 
-    -- Frame principal
-    local MainFrame = CriarElemento("Frame", {
-        Name = "MainFrame",
-        Size = UDim2.new(0, 450, 0, 500),
-        Position = UDim2.new(0.5, -225, 0.5, -250),
+    -- Container Principal
+    local MainContainer = CriarElemento("Frame", {
+        Name = "MainContainer",
+        Size = UDim2.new(0, 600, 0, 400),
+        Position = MenuPosition,
         BackgroundColor3 = SHAKA_CONFIG.COR_PRETO,
         BorderColor3 = SHAKA_CONFIG.COR_ROXO,
         BorderSizePixel = 2,
+        ClipsDescendants = true,
         Parent = GUI
     })
 
-    -- Adicionar sombra
-    local Shadow = CriarElemento("Frame", {
-        Name = "Shadow",
-        Size = UDim2.new(1, 10, 1, 10),
-        Position = UDim2.new(0, -5, 0, -5),
-        BackgroundColor3 = Color3.new(0, 0, 0),
-        BackgroundTransparency = 0.8,
-        BorderSizePixel = 0,
-        Parent = MainFrame,
-        ZIndex = -1
-    })
-
-    -- Header
+    -- Header arrastável
     local Header = CriarElemento("Frame", {
         Name = "Header",
-        Size = UDim2.new(1, 0, 0, 50),
-        BackgroundColor3 = SHAKA_CONFIG.COR_ROXO,
+        Size = UDim2.new(1, 0, 0, 35),
+        BackgroundColor3 = SHAKA_CONFIG.COR_ROXO_ESCURO,
         BorderSizePixel = 0,
-        Parent = MainFrame
+        Parent = MainContainer
     })
 
-    local Title = CriarElemento("TextLabel", {
-        Name = "Title",
-        Size = UDim2.new(1, 0, 1, 0),
+    local Logo = CriarElemento("TextLabel", {
+        Name = "Logo",
+        Size = UDim2.new(0, 120, 1, 0),
         BackgroundTransparency = 1,
-        Text = SHAKA_CONFIG.NOME .. " HUB " .. SHAKA_CONFIG.VERSAO,
+        Text = "🟣 SHAKA",
         TextColor3 = Color3.new(1, 1, 1),
+        TextScaled = true,
+        Font = Enum.Font.GothamBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = Header
+    })
+
+    local Version = CriarElemento("TextLabel", {
+        Name = "Version",
+        Size = UDim2.new(0, 80, 1, 0),
+        Position = UDim2.new(1, -80, 0, 0),
+        BackgroundTransparency = 1,
+        Text = SHAKA_CONFIG.VERSAO,
+        TextColor3 = Color3.new(0.8, 0.8, 0.8),
+        TextScaled = true,
+        Font = Enum.Font.Gotham,
+        Parent = Header
+    })
+
+    local MinimizeButton = CriarElemento("TextButton", {
+        Name = "MinimizeButton",
+        Size = UDim2.new(0, 30, 0, 30),
+        Position = UDim2.new(1, -70, 0, 2),
+        BackgroundColor3 = SHAKA_CONFIG.COR_ROXO_CLARO,
+        TextColor3 = Color3.new(1, 1, 1),
+        Text = "_",
         TextScaled = true,
         Font = Enum.Font.GothamBold,
         Parent = Header
     })
 
-    -- Botão fechar
     local CloseButton = CriarElemento("TextButton", {
         Name = "CloseButton",
         Size = UDim2.new(0, 30, 0, 30),
-        Position = UDim2.new(1, -35, 0, 10),
-        BackgroundColor3 = Color3.new(1, 0, 0),
+        Position = UDim2.new(1, -35, 0, 2),
+        BackgroundColor3 = Color3.fromRGB(200, 0, 0),
         TextColor3 = Color3.new(1, 1, 1),
-        Text = "X",
+        Text = "×",
         TextScaled = true,
         Font = Enum.Font.GothamBold,
         Parent = Header
     })
 
-    CloseButton.MouseButton1Click:Connect(function()
-        GUI:Destroy()
-        GUI = nil
-    end)
-
-    -- Abas
-    local TabsFrame = CriarElemento("Frame", {
-        Name = "TabsFrame",
-        Size = UDim2.new(1, 0, 0, 40),
-        Position = UDim2.new(0, 0, 0, 50),
-        BackgroundColor3 = SHAKA_CONFIG.COR_PRETO_CLARO,
+    -- Container do conteúdo
+    local ContentContainer = CriarElemento("Frame", {
+        Name = "ContentContainer",
+        Size = UDim2.new(1, 0, 1, -35),
+        Position = UDim2.new(0, 0, 0, 35),
+        BackgroundColor3 = SHAKA_CONFIG.COR_PRETO,
         BorderSizePixel = 0,
-        Parent = MainFrame
+        Parent = MainContainer
     })
 
-    local Tabs = {"Player", "ESP", "Teleport", "Visuals"}
-    local CurrentTab = "Player"
-    local ContentFrames = {}
+    -- Abas laterais
+    local SideTabs = CriarElemento("Frame", {
+        Name = "SideTabs",
+        Size = UDim2.new(0, 120, 1, 0),
+        BackgroundColor3 = SHAKA_CONFIG.COR_PRETO_CLARO,
+        BorderSizePixel = 0,
+        Parent = ContentContainer
+    })
 
-    -- Criar botões das abas
-    for i, tabName in ipairs(Tabs) do
+    -- Conteúdo das abas
+    local TabContent = CriarElemento("Frame", {
+        Name = "TabContent",
+        Size = UDim2.new(1, -120, 1, 0),
+        Position = UDim2.new(0, 120, 0, 0),
+        BackgroundColor3 = SHAKA_CONFIG.COR_PRETO,
+        BorderSizePixel = 0,
+        Parent = ContentContainer
+    })
+
+    -- Lista de abas
+    local Tabs = {
+        {Nome = "Player", Icon = "👤"},
+        {Nome = "ESP", Icon = "🎯"},
+        {Nome = "Teleport", Icon = "📍"},
+        {Nome = "Visuals", Icon = "✨"},
+        {Nome = "Settings", Icon = "⚙️"}
+    }
+
+    local CurrentTab = "Player"
+    local TabFrames = {}
+
+    -- Criar botões das abas laterais
+    for i, tab in ipairs(Tabs) do
         local TabButton = CriarElemento("TextButton", {
-            Name = tabName .. "Tab",
-            Size = UDim2.new(1/#Tabs, 0, 1, 0),
-            Position = UDim2.new((i-1)/#Tabs, 0, 0, 0),
+            Name = tab.Nome .. "Tab",
+            Size = UDim2.new(1, -10, 0, 50),
+            Position = UDim2.new(0, 5, 0, (i-1) * 55 + 5),
             BackgroundColor3 = SHAKA_CONFIG.COR_PRETO_CLARO,
+            BorderColor3 = SHAKA_CONFIG.COR_ROXO,
+            BorderSizePixel = 1,
+            Text = tab.Icon .. "\n" .. tab.Nome,
             TextColor3 = Color3.new(1, 1, 1),
-            Text = tabName,
             TextScaled = true,
             Font = Enum.Font.Gotham,
-            Parent = TabsFrame
+            Parent = SideTabs
         })
 
         -- Frame de conteúdo para cada aba
         local ContentFrame = CriarElemento("ScrollingFrame", {
-            Name = tabName .. "Content",
-            Size = UDim2.new(1, -20, 1, -100),
-            Position = UDim2.new(0, 10, 0, 90),
+            Name = tab.Nome .. "Content",
+            Size = UDim2.new(1, -20, 1, -20),
+            Position = UDim2.new(0, 10, 0, 10),
             BackgroundTransparency = 1,
             BorderSizePixel = 0,
             ScrollBarThickness = 5,
             CanvasSize = UDim2.new(0, 0, 0, 0),
             Visible = false,
-            Parent = MainFrame
+            Parent = TabContent
         })
 
-        ContentFrames[tabName] = ContentFrame
+        TabFrames[tab.Nome] = ContentFrame
 
         TabButton.MouseButton1Click:Connect(function()
-            CurrentTab = tabName
-            for name, frame in pairs(ContentFrames) do
-                frame.Visible = (name == tabName)
+            CurrentTab = tab.Nome
+            for nome, frame in pairs(TabFrames) do
+                frame.Visible = (nome == tab.Nome)
             end
             -- Atualizar cores dos botões
-            for _, btn in ipairs(TabsFrame:GetChildren()) do
+            for _, btn in ipairs(SideTabs:GetChildren()) do
                 if btn:IsA("TextButton") then
-                    btn.BackgroundColor3 = SHAKA_CONFIG.COR_PRETO_CLARO
+                    AnimacaoSuave(btn, {BackgroundColor3 = SHAKA_CONFIG.COR_PRETO_CLARO}, 0.2)
                 end
             end
-            TabButton.BackgroundColor3 = SHAKA_CONFIG.COR_ROXO_CLARO
+            AnimacaoSuave(TabButton, {BackgroundColor3 = SHAKA_CONFIG.COR_ROXO}, 0.2)
         end)
 
         if i == 1 then
-            TabButton.BackgroundColor3 = SHAKA_CONFIG.COR_ROXO_CLARO
+            TabButton.BackgroundColor3 = SHAKA_CONFIG.COR_ROXO
             ContentFrame.Visible = true
         end
     end
 
-    -- Conteúdo da aba Player
-    local PlayerContent = ContentFrames["Player"]
-    
-    local function CriarToggle(nome, posicao, callback)
-        local ToggleFrame = CriarElemento("Frame", {
-            Size = UDim2.new(1, -20, 0, 40),
-            Position = UDim2.new(0, 10, 0, posicao),
+    -- Função para criar toggles modernos
+    local function CriarToggle(nome, descricao, posicaoY, callback, valorPadrao)
+        local ToggleContainer = CriarElemento("Frame", {
+            Size = UDim2.new(1, -20, 0, 60),
+            Position = UDim2.new(0, 10, 0, posicaoY),
             BackgroundColor3 = SHAKA_CONFIG.COR_PRETO_CLARO,
-            BorderSizePixel = 0,
-            Parent = PlayerContent
+            BorderColor3 = SHAKA_CONFIG.COR_CINZA,
+            BorderSizePixel = 1,
+            Parent = TabFrames[CurrentTab]
         })
 
-        local ToggleLabel = CriarElemento("TextLabel", {
+        local ToggleInfo = CriarElemento("Frame", {
             Size = UDim2.new(0.7, 0, 1, 0),
+            BackgroundTransparency = 1,
+            Parent = ToggleContainer
+        })
+
+        local ToggleName = CriarElemento("TextLabel", {
+            Size = UDim2.new(1, 0, 0, 30),
             BackgroundTransparency = 1,
             Text = nome,
             TextColor3 = Color3.new(1, 1, 1),
             TextXAlignment = Enum.TextXAlignment.Left,
             TextScaled = true,
+            Font = Enum.Font.GothamBold,
+            Parent = ToggleInfo
+        })
+
+        local ToggleDesc = CriarElemento("TextLabel", {
+            Size = UDim2.new(1, 0, 0, 25),
+            Position = UDim2.new(0, 0, 0, 30),
+            BackgroundTransparency = 1,
+            Text = descricao,
+            TextColor3 = Color3.new(0.8, 0.8, 0.8),
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextScaled = false,
+            TextSize = 12,
             Font = Enum.Font.Gotham,
-            Parent = ToggleFrame
+            Parent = ToggleInfo
         })
 
         local ToggleButton = CriarElemento("TextButton", {
-            Size = UDim2.new(0, 60, 0, 30),
-            Position = UDim2.new(1, -70, 0.5, -15),
-            BackgroundColor3 = Color3.fromRGB(255, 0, 0),
-            Text = "OFF",
-            TextColor3 = Color3.new(1, 1, 1),
-            TextScaled = true,
-            Font = Enum.Font.GothamBold,
-            Parent = ToggleFrame
+            Size = UDim2.new(0, 50, 0, 25),
+            Position = UDim2.new(1, -60, 0.5, -12),
+            BackgroundColor3 = valorPadrao and SHAKA_CONFIG.COR_ROXO or SHAKA_CONFIG.COR_CINZA,
+            Text = "",
+            Parent = ToggleContainer
         })
 
-        local estado = false
-        
+        local ToggleKnob = CriarElemento("Frame", {
+            Size = UDim2.new(0, 21, 0, 21),
+            Position = UDim2.new(0, valorPadrao and 25 or 2, 0, 2),
+            BackgroundColor3 = Color3.new(1, 1, 1),
+            BorderSizePixel = 0,
+            Parent = ToggleButton
+        })
+
+        local estado = valorPadrao or false
+
+        local function AtualizarToggle()
+            if estado then
+                AnimacaoSuave(ToggleButton, {BackgroundColor3 = SHAKA_CONFIG.COR_ROXO}, 0.2)
+                AnimacaoSuave(ToggleKnob, {Position = UDim2.new(0, 25, 0, 2)}, 0.2)
+            else
+                AnimacaoSuave(ToggleButton, {BackgroundColor3 = SHAKA_CONFIG.COR_CINZA}, 0.2)
+                AnimacaoSuave(ToggleKnob, {Position = UDim2.new(0, 2, 0, 2)}, 0.2)
+            end
+            callback(estado)
+        end
+
         ToggleButton.MouseButton1Click:Connect(function()
             estado = not estado
-            if estado then
-                ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-                ToggleButton.Text = "ON"
-            else
-                ToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-                ToggleButton.Text = "OFF"
-            end
-            callback(estado)
+            AtualizarToggle()
         end)
 
-        return {Frame = ToggleFrame, SetState = function(state)
-            estado = state
-            if estado then
-                ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-                ToggleButton.Text = "ON"
-            else
-                ToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-                ToggleButton.Text = "OFF"
-            end
-            callback(estado)
-        end}
+        return {
+            SetState = function(novoEstado)
+                estado = novoEstado
+                AtualizarToggle()
+            end,
+            GetState = function() return estado end
+        }
     end
 
-    -- Funções Player
-    local NoclipToggle = CriarToggle("Noclip", 10, function(estado)
+    -- Conteúdo da aba Player
+    local PlayerToggles = {}
+    PlayerToggles.Noclip = CriarToggle("Noclip", "Atravessar paredes", 10, function(estado)
         NoclipEnabled = estado
         Log("Noclip: " .. (estado and "ON" or "OFF"))
-    end)
+    end, false)
 
-    local FlyToggle = CriarToggle("Fly", 60, function(estado)
+    PlayerToggles.Fly = CriarToggle("Fly", "Voar pelo mapa", 80, function(estado)
         FlyEnabled = estado
         AtivarFly(estado)
         Log("Fly: " .. (estado and "ON" or "OFF"))
-    end)
+    end, false)
 
-    local InfJumpToggle = CriarToggle("Pulo Infinito", 110, function(estado)
+    PlayerToggles.InfJump = CriarToggle("Pulo Infinito", "Pular sem limites", 150, function(estado)
+        InfJumpEnabled = estado
         AtivarPuloInfinito(estado)
         Log("Pulo Infinito: " .. (estado and "ON" or "OFF"))
-    end)
+    end, false)
 
-    local SpeedToggle = CriarToggle("Super Velocidade", 160, function(estado)
+    PlayerToggles.Speed = CriarToggle("Super Velocidade", "Aumentar velocidade", 220, function(estado)
+        SpeedEnabled = estado
         AtivarSuperVelocidade(estado)
         Log("Super Velocidade: " .. (estado and "ON" or "OFF"))
-    end)
+    end, false)
 
-    local InvisToggle = CriarToggle("Ficar Invisível", 210, function(estado)
+    PlayerToggles.Invis = CriarToggle("Invisibilidade", "Ficar invisível", 290, function(estado)
+        InvisEnabled = estado
         FicarInvisivel(estado)
         Log("Invisibilidade: " .. (estado and "ON" or "OFF"))
-    end)
+    end, false)
 
     -- Conteúdo da aba ESP
-    local ESPContent = ContentFrames["ESP"]
-    
-    local ESPToggle = CriarToggle("Ativar ESP", 10, function(estado)
+    local ESPToggles = {}
+    ESPToggles.ESP = CriarToggle("ESP Ativado", "Visualizar jogadores", 10, function(estado)
         if estado then
             AtivarESP()
         else
             DesativarESP()
         end
         Log("ESP: " .. (estado and "ON" or "OFF"))
-    end)
+    end, false)
 
-    local ESPPlayersToggle = CriarToggle("ESP Players", 60, function(estado)
-        ESPConfig.Players = estado
+    ESPToggles.Box = CriarToggle("ESP Box", "Caixa ao redor dos players", 80, function(estado)
+        ESPConfig.Box = estado
         AtualizarESP()
-        Log("ESP Players: " .. (estado and "ON" or "OFF"))
-    end)
+        Log("ESP Box: " .. (estado and "ON" or "OFF"))
+    end, true)
 
-    local ESPNamesToggle = CriarToggle("Mostrar Nomes", 110, function(estado)
-        ESPConfig.Nomes = estado
+    ESPToggles.Tracer = CriarToggle("ESP Tracer", "Linha até os players", 150, function(estado)
+        ESPConfig.Tracer = estado
+        AtualizarESP()
+        Log("ESP Tracer: " .. (estado and "ON" or "OFF"))
+    end, true)
+
+    ESPToggles.Names = CriarToggle("Mostrar Nomes", "Exibir nomes dos players", 220, function(estado)
+        ESPConfig.Names = estado
         AtualizarESP()
         Log("Nomes ESP: " .. (estado and "ON" or "OFF"))
-    end)
+    end, true)
+
+    ESPToggles.Distance = CriarToggle("Mostrar Distância", "Exibir distância", 290, function(estado)
+        ESPConfig.Distance = estado
+        AtualizarESP()
+        Log("Distância ESP: " .. (estado and "ON" or "OFF"))
+    end, true)
 
     -- Conteúdo da aba Teleport
-    local TeleportContent = ContentFrames["Teleport"]
-    
-    -- Lista de players
-    local PlayersList = CriarElemento("ScrollingFrame", {
-        Size = UDim2.new(1, -20, 0, 200),
+    local PlayersListFrame = CriarElemento("ScrollingFrame", {
+        Size = UDim2.new(1, -20, 0, 250),
         Position = UDim2.new(0, 10, 0, 10),
         BackgroundColor3 = SHAKA_CONFIG.COR_PRETO_CLARO,
-        BorderSizePixel = 0,
+        BorderSizePixel = 1,
         ScrollBarThickness = 5,
         CanvasSize = UDim2.new(0, 0, 0, 0),
-        Parent = TeleportContent
-    })
-
-    local TPButton = CriarElemento("TextButton", {
-        Size = UDim2.new(1, -20, 0, 40),
-        Position = UDim2.new(0, 10, 0, 220),
-        BackgroundColor3 = SHAKA_CONFIG.COR_ROXO,
-        TextColor3 = Color3.new(1, 1, 1),
-        Text = "TELEPORTAR PARA PLAYER",
-        TextScaled = true,
-        Font = Enum.Font.GothamBold,
-        Parent = TeleportContent
+        Parent = TabFrames["Teleport"]
     })
 
     local SelectedPlayerLabel = CriarElemento("TextLabel", {
@@ -330,44 +400,56 @@ local function CriarGUI()
         TextColor3 = Color3.new(1, 1, 1),
         TextScaled = true,
         Font = Enum.Font.Gotham,
-        Parent = TeleportContent
+        Parent = TabFrames["Teleport"]
     })
 
-    -- Atualizar lista de players
+    local TPButton = CriarElemento("TextButton", {
+        Size = UDim2.new(1, -20, 0, 40),
+        Position = UDim2.new(0, 10, 0, 310),
+        BackgroundColor3 = SHAKA_CONFIG.COR_ROXO,
+        TextColor3 = Color3.new(1, 1, 1),
+        Text = "TELEPORTAR PARA PLAYER",
+        TextScaled = true,
+        Font = Enum.Font.GothamBold,
+        Parent = TabFrames["Teleport"]
+    })
+
+    -- Função para atualizar lista de players
     local function AtualizarListaPlayers()
-        PlayersList:ClearAllChildren()
+        PlayersListFrame:ClearAllChildren()
         local posY = 0
         
         for _, player in ipairs(Players:GetPlayers()) do
             if player ~= LocalPlayer then
                 local PlayerButton = CriarElemento("TextButton", {
-                    Size = UDim2.new(1, -10, 0, 30),
+                    Size = UDim2.new(1, -10, 0, 40),
                     Position = UDim2.new(0, 5, 0, posY),
                     BackgroundColor3 = SHAKA_CONFIG.COR_PRETO,
+                    BorderColor3 = SHAKA_CONFIG.COR_CINZA,
+                    Text = "👤 " .. player.Name,
                     TextColor3 = Color3.new(1, 1, 1),
-                    Text = player.Name,
                     TextScaled = true,
                     Font = Enum.Font.Gotham,
-                    Parent = PlayersList
+                    Parent = PlayersListFrame
                 })
 
                 PlayerButton.MouseButton1Click:Connect(function()
                     SelectedPlayer = player
                     SelectedPlayerLabel.Text = "Selecionado: " .. player.Name
                     -- Destacar botão
-                    for _, btn in ipairs(PlayersList:GetChildren()) do
+                    for _, btn in ipairs(PlayersListFrame:GetChildren()) do
                         if btn:IsA("TextButton") then
-                            btn.BackgroundColor3 = SHAKA_CONFIG.COR_PRETO
+                            AnimacaoSuave(btn, {BackgroundColor3 = SHAKA_CONFIG.COR_PRETO}, 0.2)
                         end
                     end
-                    PlayerButton.BackgroundColor3 = SHAKA_CONFIG.COR_ROXO_CLARO
+                    AnimacaoSuave(PlayerButton, {BackgroundColor3 = SHAKA_CONFIG.COR_ROXO}, 0.2)
                 end)
 
-                posY = posY + 35
+                posY = posY + 45
             end
         end
         
-        PlayersList.CanvasSize = UDim2.new(0, 0, 0, posY)
+        PlayersListFrame.CanvasSize = UDim2.new(0, 0, 0, posY)
     end
 
     TPButton.MouseButton1Click:Connect(function()
@@ -380,16 +462,60 @@ local function CriarGUI()
     end)
 
     -- Conteúdo da aba Visuals
-    local VisualsContent = ContentFrames["Visuals"]
-    
-    local FullbrightToggle = CriarToggle("Fullbright", 10, function(estado)
+    local VisualsToggles = {}
+    VisualsToggles.Fullbright = CriarToggle("Fullbright", "Iluminação total", 10, function(estado)
         AtivarFullbright(estado)
         Log("Fullbright: " .. (estado and "ON" or "OFF"))
-    end)
+    end, false)
 
-    local FPSBoostToggle = CriarToggle("Otimizar FPS", 60, function(estado)
+    VisualsToggles.FPSBoost = CriarToggle("Otimizar FPS", "Melhorar performance", 80, function(estado)
         OtimizarFPS(estado)
         Log("FPS Boost: " .. (estado and "ON" or "OFF"))
+    end, false)
+
+    -- Sistema de arrastar
+    local function IniciarArraste(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            Dragging = true
+            DragStart = input.Position
+            local startingPosition = MainContainer.Position
+            local connection = RunService.Heartbeat:Connect(function()
+                if Dragging then
+                    local delta = input.Position - DragStart
+                    MainContainer.Position = UDim2.new(
+                        startingPosition.X.Scale,
+                        startingPosition.X.Offset + delta.X,
+                        startingPosition.Y.Scale,
+                        startingPosition.Y.Offset + delta.Y
+                    )
+                else
+                    connection:Disconnect()
+                end
+            end)
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    Dragging = false
+                    MenuPosition = MainContainer.Position
+                end
+            end)
+        end
+    end
+
+    Header.InputBegan:Connect(IniciarArraste)
+
+    -- Botões do header
+    MinimizeButton.MouseButton1Click:Connect(function()
+        MenuVisible = not MenuVisible
+        if MenuVisible then
+            AnimacaoSuave(MainContainer, {Size = UDim2.new(0, 600, 0, 400)}, 0.3)
+        else
+            AnimacaoSuave(MainContainer, {Size = UDim2.new(0, 120, 0, 35)}, 0.3)
+        end
+    end)
+
+    CloseButton.MouseButton1Click:Connect(function()
+        GUI:Destroy()
+        GUI = nil
     end)
 
     -- Atualizar lista de players periodicamente
@@ -398,22 +524,23 @@ local function CriarGUI()
     end))
 
     -- Ajustar tamanho do conteúdo
-    PlayerContent.CanvasSize = UDim2.new(0, 0, 0, 300)
-    ESPContent.CanvasSize = UDim2.new(0, 0, 0, 200)
-    TeleportContent.CanvasSize = UDim2.new(0, 0, 0, 320)
-    VisualsContent.CanvasSize = UDim2.new(0, 0, 0, 150)
+    for _, frame in pairs(TabFrames) do
+        frame.CanvasSize = UDim2.new(0, 0, 0, 400)
+    end
 
     return GUI
 end
 
--- Sistema ESP
+-- Sistema ESP Avançado
 local ESPConfig = {
-    Players = true,
-    Nomes = true
+    Box = true,
+    Tracer = true,
+    Names = true,
+    Distance = true
 }
 
 local function AtivarESP()
-    DesativarESP() -- Limpar ESP anterior
+    DesativarESP()
     
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
@@ -421,86 +548,100 @@ local function AtivarESP()
         end
     end
     
-    -- Conectar para novos players
     table.insert(Connections, Players.PlayerAdded:Connect(function(player)
         player.CharacterAdded:Connect(function(character)
             wait(1)
-            if ESPConfig.Players then
-                CriarESP(character, player.Name)
-            end
+            CriarESP(character, player.Name)
         end)
     end))
-    
-    -- Conectar para caracteres existentes
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer then
-            player.CharacterAdded:Connect(function(character)
-                wait(1)
-                if ESPConfig.Players then
-                    CriarESP(character, player.Name)
-                end
-            end)
-        end
-    end
 end
 
 local function CriarESP(character, nome)
     if ESP_Objects[character] then return end
     
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "SHAKA_ESP"
-    highlight.FillColor = SHAKA_CONFIG.COR_ROXO
-    highlight.FillTransparency = 0.8
-    highlight.OutlineColor = Color3.new(1, 1, 1)
-    highlight.OutlineTransparency = 0
-    highlight.Parent = character
-    highlight.Adornee = character
+    local espFolder = Instance.new("Folder")
+    espFolder.Name = "SHAKA_ESP"
+    espFolder.Parent = character
     
-    if ESPConfig.Nomes then
+    -- ESP Box
+    if ESPConfig.Box then
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "Box"
+        highlight.FillColor = SHAKA_CONFIG.COR_ROXO
+        highlight.FillTransparency = 0.8
+        highlight.OutlineColor = Color3.new(1, 1, 1)
+        highlight.OutlineTransparency = 0
+        highlight.Parent = espFolder
+        highlight.Adornee = character
+    end
+    
+    -- ESP Tracer
+    if ESPConfig.Tracer then
+        local tracer = Instance.new("LineHandleAdornment")
+        tracer.Name = "Tracer"
+        tracer.Color3 = SHAKA_CONFIG.COR_ROXO
+        tracer.Thickness = 2
+        tracer.ZIndex = 10
+        tracer.Parent = espFolder
+        
+        table.insert(Connections, RunService.Heartbeat:Connect(function()
+            if character and character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                tracer.Adornee = character.HumanoidRootPart
+                tracer.Length = (character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+                tracer.CFrame = CFrame.new(character.HumanoidRootPart.Position, LocalPlayer.Character.HumanoidRootPart.Position)
+            end
+        end))
+    end
+    
+    -- Nome e Distância
+    if ESPConfig.Names then
         local billboard = Instance.new("BillboardGui")
-        billboard.Name = "SHAKA_NameTag"
+        billboard.Name = "NameTag"
         billboard.Size = UDim2.new(0, 200, 0, 50)
         billboard.StudsOffset = Vector3.new(0, 3, 0)
         billboard.AlwaysOnTop = true
-        billboard.Parent = character
+        billboard.Parent = espFolder
         
         local label = Instance.new("TextLabel")
         label.Size = UDim2.new(1, 0, 1, 0)
         label.BackgroundTransparency = 1
-        label.Text = nome
+        label.Text = nome .. (ESPConfig.Distance and "" or "")
         label.TextColor3 = Color3.new(1, 1, 1)
         label.TextScaled = true
         label.Font = Enum.Font.GothamBold
         label.Parent = billboard
+        
+        -- Atualizar distância
+        if ESPConfig.Distance then
+            table.insert(Connections, RunService.Heartbeat:Connect(function()
+                if character and character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    local distancia = math.floor((character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude)
+                    label.Text = nome .. " [" .. distancia .. "m]"
+                end
+            end))
+        end
     end
     
-    ESP_Objects[character] = {Highlight = highlight}
+    ESP_Objects[character] = espFolder
 end
 
 local function DesativarESP()
-    for _, data in pairs(ESP_Objects) do
-        if data.Highlight then
-            data.Highlight:Destroy()
-        end
+    for _, espFolder in pairs(ESP_Objects) do
+        espFolder:Destroy()
     end
     ESP_Objects = {}
     
-    -- Limpar todos os ESPs do jogo
     for _, player in ipairs(Players:GetPlayers()) do
         if player.Character then
             local esp = player.Character:FindFirstChild("SHAKA_ESP")
             if esp then esp:Destroy() end
-            local nameTag = player.Character:FindFirstChild("SHAKA_NameTag")
-            if nameTag then nameTag:Destroy() end
         end
     end
 end
 
 local function AtualizarESP()
     DesativarESP()
-    if ESPConfig.Players then
-        AtivarESP()
-    end
+    AtivarESP()
 end
 
 -- Funções do Player
@@ -563,8 +704,6 @@ local function AtivarPuloInfinito(estado)
             end
         end)
         table.insert(Connections, connection)
-    else
-        -- A conexão será limpa quando desativada
     end
 end
 
@@ -644,21 +783,11 @@ table.insert(Connections, RunService.Stepped:Connect(function()
 end))
 
 -- Inicialização
-Log("Iniciando SHAKA Hub...")
-wait(1)
+Log("Iniciando SHAKA Hub Premium...")
+wait(2)
 
 -- Criar GUI
 CriarGUI()
-
--- Limpeza quando o script for destruído
-LocalPlayer.CharacterAdded:Connect(function()
-    wait(1)
-    if not GUI then
-        CriarGUI()
-    end
-end)
-
-Log("SHAKA Hub carregado com sucesso! Pressione F para abrir/fechar")
 
 -- Toggle com F
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -675,3 +804,5 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         end
     end
 end)
+
+Log("SHAKA Hub Premium carregado! Pressione F para abrir/fechar")
