@@ -1,4 +1,4 @@
--- SHAKA Hub Premium v6.0 - Menu Completo e Funcional
+-- SHAKA Hub Premium v6.1 - Menu Completo e Funcional
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
@@ -12,9 +12,11 @@ local Camera = workspace.CurrentCamera
 -- ════════════════════════════════════════════════════════════
 local CONFIG = {
     NOME = "SHAKA",
-    VERSAO = "v6.0",
+    VERSAO = "v6.1",
     COR_ROXO = Color3.fromRGB(139, 0, 255),
     COR_ROXO_HOVER = Color3.fromRGB(170, 50, 255),
+    COR_CUSTOM = nil,
+    RAINBOW_MODE = false,
     COR_FUNDO = Color3.fromRGB(10, 10, 15),
     COR_FUNDO_2 = Color3.fromRGB(18, 18, 25),
     COR_TEXTO = Color3.fromRGB(255, 255, 255),
@@ -30,8 +32,9 @@ local GUI = nil
 local Connections = {}
 local SelectedPlayer = nil
 local ToggleStates = {}
+local RainbowHue = 0
 
--- Estados salvos (persistem ao fechar/abrir o menu)
+-- Estados salvos
 local SavedStates = {
     FlyEnabled = false,
     FlySpeed = 50,
@@ -50,10 +53,36 @@ local SavedStates = {
     RemoveFog = false,
     RemoveShadows = false,
     FOV = 70,
-    Brightness = 1
+    Brightness = 1,
+    MenuRainbowMode = false,
+    ColorR = 139,
+    ColorG = 0,
+    ColorB = 255
 }
 
 local ESPObjects = {}
+
+-- Funções para obter cor atual
+local function GetCurrentColor()
+    if CONFIG.RAINBOW_MODE then
+        return Color3.fromHSV(RainbowHue, 1, 1)
+    elseif CONFIG.COR_CUSTOM then
+        return CONFIG.COR_CUSTOM
+    else
+        return CONFIG.COR_ROXO
+    end
+end
+
+local function GetCurrentColorHover()
+    if CONFIG.RAINBOW_MODE then
+        return Color3.fromHSV((RainbowHue + 0.05) % 1, 1, 1)
+    elseif CONFIG.COR_CUSTOM then
+        local r, g, b = CONFIG.COR_CUSTOM.R, CONFIG.COR_CUSTOM.G, CONFIG.COR_CUSTOM.B
+        return Color3.new(math.min(r * 1.2, 1), math.min(g * 1.2, 1), math.min(b * 1.2, 1))
+    else
+        return CONFIG.COR_ROXO_HOVER
+    end
+end
 
 -- ════════════════════════════════════════════════════════════
 -- FUNÇÕES AUXILIARES
@@ -81,7 +110,7 @@ local function Notify(text, color)
         
         Instance.new("UICorner", notif).CornerRadius = UDim.new(0, 10)
         local stroke = Instance.new("UIStroke", notif)
-        stroke.Color = color or CONFIG.COR_ROXO
+        stroke.Color = color or GetCurrentColor()
         stroke.Thickness = 2
         
         local label = Instance.new("TextLabel")
@@ -259,7 +288,7 @@ local function ToggleGodMode(state)
     end
 end
 
--- Manter velocidade e pulo constantemente
+-- Manter velocidade e pulo
 task.spawn(function()
     while true do
         local char = LocalPlayer.Character
@@ -279,7 +308,7 @@ task.spawn(function()
 end)
 
 -- ════════════════════════════════════════════════════════════
--- FUNÇÕES DE TELEPORTE (CORRIGIDAS)
+-- FUNÇÕES DE TELEPORTE
 -- ════════════════════════════════════════════════════════════
 local function TeleportToPlayer()
     if not SelectedPlayer then
@@ -295,7 +324,6 @@ local function TeleportToPlayer()
         local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
         
         if root and targetRoot then
-            -- Desabilitar noclip temporariamente se estiver ativo
             local wasNoclip = SavedStates.NoclipEnabled
             if wasNoclip then
                 ToggleNoclip(false)
@@ -303,7 +331,6 @@ local function TeleportToPlayer()
             
             root.CFrame = targetRoot.CFrame * CFrame.new(0, 0, 3)
             
-            -- Reabilitar noclip se estava ativo
             if wasNoclip then
                 task.wait(0.1)
                 ToggleNoclip(true)
@@ -339,7 +366,7 @@ local function BringPlayer()
 end
 
 -- ════════════════════════════════════════════════════════════
--- FUNÇÕES DE COMBAT (CORRIGIDAS)
+-- FUNÇÕES DE COMBAT (CORRIGIDAS E FUNCIONAIS)
 -- ════════════════════════════════════════════════════════════
 local function KillPlayer()
     if not SelectedPlayer then
@@ -351,8 +378,15 @@ local function KillPlayer()
     if targetChar then
         local humanoid = targetChar:FindFirstChildOfClass("Humanoid")
         if humanoid then
+            humanoid:TakeDamage(humanoid.MaxHealth)
             humanoid.Health = 0
-            humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+            
+            for _, part in pairs(targetChar:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part:BreakJoints()
+                end
+            end
+            
             Notify("💀 " .. SelectedPlayer.Name .. " eliminado", CONFIG.COR_SUCESSO)
         end
     end
@@ -368,11 +402,15 @@ local function ExplodePlayer()
     if targetChar then
         local root = targetChar:FindFirstChild("HumanoidRootPart")
         if root then
-            local explosion = Instance.new("Explosion")
-            explosion.Position = root.Position
-            explosion.BlastRadius = 20
-            explosion.BlastPressure = 1000000
-            explosion.Parent = workspace
+            for i = 1, 3 do
+                local explosion = Instance.new("Explosion")
+                explosion.Position = root.Position
+                explosion.BlastRadius = 25
+                explosion.BlastPressure = 500000
+                explosion.DestroyJointRadiusPercent = 1
+                explosion.Parent = workspace
+                task.wait(0.1)
+            end
             Notify("💥 Explosão criada!", CONFIG.COR_SUCESSO)
         end
     end
@@ -386,12 +424,23 @@ local function BurnPlayer()
     
     local targetChar = SelectedPlayer.Character
     if targetChar then
+        local humanoid = targetChar:FindFirstChildOfClass("Humanoid")
+        
         for _, part in pairs(targetChar:GetChildren()) do
             if part:IsA("BasePart") then
                 local fire = Instance.new("Fire")
-                fire.Size = 15
+                fire.Size = 20
                 fire.Heat = 25
                 fire.Parent = part
+                
+                task.spawn(function()
+                    for i = 1, 10 do
+                        if humanoid and humanoid.Parent then
+                            humanoid:TakeDamage(10)
+                        end
+                        task.wait(0.5)
+                    end
+                end)
             end
         end
         Notify("🔥 Jogador incendiado!", CONFIG.COR_SUCESSO)
@@ -408,15 +457,33 @@ local function FlingPlayer()
     if targetChar then
         local root = targetChar:FindFirstChild("HumanoidRootPart")
         if root then
+            for _, part in pairs(targetChar:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                end
+            end
+            
             local bodyVelocity = Instance.new("BodyVelocity")
-            bodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-            bodyVelocity.Velocity = Vector3.new(math.random(-200, 200), 300, math.random(-200, 200))
+            bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+            bodyVelocity.Velocity = Vector3.new(
+                math.random(-500, 500),
+                500,
+                math.random(-500, 500)
+            )
             bodyVelocity.Parent = root
             
-            task.wait(0.3)
-            if bodyVelocity and bodyVelocity.Parent then
-                bodyVelocity:Destroy()
-            end
+            task.spawn(function()
+                task.wait(0.5)
+                if bodyVelocity and bodyVelocity.Parent then
+                    bodyVelocity:Destroy()
+                end
+                task.wait(1)
+                for _, part in pairs(targetChar:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = true
+                    end
+                end
+            end)
             
             Notify("🌪️ " .. SelectedPlayer.Name .. " arremessado!", CONFIG.COR_SUCESSO)
         end
@@ -436,12 +503,167 @@ local function FreezePlayer()
                 part.Anchored = true
             end
         end
+        
+        for _, part in pairs(targetChar:GetChildren()) do
+            if part:IsA("BasePart") then
+                local ice = Instance.new("Part")
+                ice.Size = part.Size * 1.1
+                ice.CFrame = part.CFrame
+                ice.Transparency = 0.5
+                ice.Color = Color3.fromRGB(150, 200, 255)
+                ice.Material = Enum.Material.Ice
+                ice.CanCollide = false
+                ice.Anchored = true
+                ice.Parent = part
+            end
+        end
+        
         Notify("❄️ " .. SelectedPlayer.Name .. " congelado!", CONFIG.COR_SUCESSO)
     end
 end
 
+local function UnfreezePlayer()
+    if not SelectedPlayer then
+        Notify("⚠️ Selecione um jogador primeiro!", CONFIG.COR_ERRO)
+        return
+    end
+    
+    local targetChar = SelectedPlayer.Character
+    if targetChar then
+        for _, part in pairs(targetChar:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Anchored = false
+            end
+        end
+        
+        for _, part in pairs(targetChar:GetChildren()) do
+            if part:IsA("BasePart") then
+                for _, child in pairs(part:GetChildren()) do
+                    if child:IsA("Part") and child.Material == Enum.Material.Ice then
+                        child:Destroy()
+                    end
+                end
+            end
+        end
+        
+        Notify("🔥 " .. SelectedPlayer.Name .. " descongelado!", CONFIG.COR_SUCESSO)
+    end
+end
+
+local function SpinPlayer()
+    if not SelectedPlayer then
+        Notify("⚠️ Selecione um jogador primeiro!", CONFIG.COR_ERRO)
+        return
+    end
+    
+    local targetChar = SelectedPlayer.Character
+    if targetChar then
+        local root = targetChar:FindFirstChild("HumanoidRootPart")
+        if root then
+            local spin = Instance.new("BodyAngularVelocity")
+            spin.MaxTorque = Vector3.new(0, math.huge, 0)
+            spin.AngularVelocity = Vector3.new(0, 100, 0)
+            spin.Parent = root
+            
+            task.spawn(function()
+                task.wait(5)
+                if spin and spin.Parent then
+                    spin:Destroy()
+                end
+            end)
+            
+            Notify("🌀 " .. SelectedPlayer.Name .. " girando!", CONFIG.COR_SUCESSO)
+        end
+    end
+end
+
+local function LaunchPlayer()
+    if not SelectedPlayer then
+        Notify("⚠️ Selecione um jogador primeiro!", CONFIG.COR_ERRO)
+        return
+    end
+    
+    local targetChar = SelectedPlayer.Character
+    if targetChar then
+        local root = targetChar:FindFirstChild("HumanoidRootPart")
+        if root then
+            local bodyVelocity = Instance.new("BodyVelocity")
+            bodyVelocity.MaxForce = Vector3.new(0, math.huge, 0)
+            bodyVelocity.Velocity = Vector3.new(0, 1000, 0)
+            bodyVelocity.Parent = root
+            
+            task.wait(0.3)
+            if bodyVelocity and bodyVelocity.Parent then
+                bodyVelocity:Destroy()
+            end
+            
+            Notify("🚀 " .. SelectedPlayer.Name .. " lançado!", CONFIG.COR_SUCESSO)
+        end
+    end
+end
+
+local function InvisiblePlayer()
+    if not SelectedPlayer then
+        Notify("⚠️ Selecione um jogador primeiro!", CONFIG.COR_ERRO)
+        return
+    end
+    
+    local targetChar = SelectedPlayer.Character
+    if targetChar then
+        for _, part in pairs(targetChar:GetDescendants()) do
+            if part:IsA("BasePart") or part:IsA("Decal") then
+                part.Transparency = 1
+            elseif part:IsA("Accessory") then
+                local handle = part:FindFirstChild("Handle")
+                if handle then
+                    handle.Transparency = 1
+                end
+            end
+        end
+        
+        Notify("👻 " .. SelectedPlayer.Name .. " invisível!", CONFIG.COR_SUCESSO)
+    end
+end
+
+local function CrashPlayer()
+    if not SelectedPlayer then
+        Notify("⚠️ Selecione um jogador primeiro!", CONFIG.COR_ERRO)
+        return
+    end
+    
+    local targetChar = SelectedPlayer.Character
+    if targetChar then
+        for i = 1, 1000 do
+            local part = Instance.new("Part")
+            part.Size = Vector3.new(10, 10, 10)
+            part.CFrame = targetChar.HumanoidRootPart.CFrame
+            part.Anchored = false
+            part.CanCollide = true
+            part.Parent = workspace
+            
+            local bodyVelocity = Instance.new("BodyVelocity")
+            bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+            bodyVelocity.Velocity = Vector3.new(
+                math.random(-100, 100),
+                math.random(-100, 100),
+                math.random(-100, 100)
+            )
+            bodyVelocity.Parent = part
+            
+            task.spawn(function()
+                task.wait(5)
+                if part and part.Parent then
+                    part:Destroy()
+                end
+            end)
+        end
+        
+        Notify("💥 Sobrecarga enviada!", CONFIG.COR_SUCESSO)
+    end
+end
+
 -- ════════════════════════════════════════════════════════════
--- SISTEMA DE ESP COMPLETO
+-- SISTEMA DE ESP
 -- ════════════════════════════════════════════════════════════
 local function ClearESP()
     for _, esp in pairs(ESPObjects) do
@@ -467,7 +689,6 @@ local function CreateESP(player)
         Health = nil
     }
     
-    -- Box ESP
     if SavedStates.ESPBox then
         esp.Box = Drawing.new("Square")
         esp.Box.Thickness = 2
@@ -478,7 +699,6 @@ local function CreateESP(player)
         esp.Box.ZIndex = 2
     end
     
-    -- Line ESP (da base da tela até o jogador)
     if SavedStates.ESPLine then
         esp.Line = Drawing.new("Line")
         esp.Line.Thickness = 2
@@ -488,7 +708,6 @@ local function CreateESP(player)
         esp.Line.ZIndex = 2
     end
     
-    -- Name ESP
     if SavedStates.ESPName then
         esp.Name = Drawing.new("Text")
         esp.Name.Size = 16
@@ -501,7 +720,6 @@ local function CreateESP(player)
         esp.Name.Text = player.Name
     end
     
-    -- Distance ESP
     if SavedStates.ESPDistance then
         esp.Distance = Drawing.new("Text")
         esp.Distance.Size = 14
@@ -513,7 +731,6 @@ local function CreateESP(player)
         esp.Distance.ZIndex = 2
     end
     
-    -- Health Bar ESP
     if SavedStates.ESPHealth then
         esp.Health = Drawing.new("Line")
         esp.Health.Thickness = 4
@@ -563,28 +780,24 @@ local function UpdateESP()
                 local height = math.abs(headPos.Y - legPos.Y)
                 local width = height / 2
                 
-                -- Update Box
                 if esp.Box and SavedStates.ESPBox then
                     esp.Box.Size = Vector2.new(width, height)
                     esp.Box.Position = Vector2.new(rootPos.X - width/2, rootPos.Y - height/2)
                     esp.Box.Visible = true
                 end
                 
-                -- Update Line
                 if esp.Line and SavedStates.ESPLine then
                     esp.Line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
                     esp.Line.To = Vector2.new(rootPos.X, rootPos.Y)
                     esp.Line.Visible = true
                 end
                 
-                -- Update Name
                 if esp.Name and SavedStates.ESPName then
                     esp.Name.Position = Vector2.new(rootPos.X, headPos.Y - 25)
                     esp.Name.Text = player.Name
                     esp.Name.Visible = true
                 end
                 
-                -- Update Distance
                 if esp.Distance and SavedStates.ESPDistance and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
                     local distance = (LocalPlayer.Character.HumanoidRootPart.Position - root.Position).Magnitude
                     esp.Distance.Position = Vector2.new(rootPos.X, legPos.Y + 5)
@@ -592,7 +805,6 @@ local function UpdateESP()
                     esp.Distance.Visible = true
                 end
                 
-                -- Update Health Bar
                 if esp.Health and SavedStates.ESPHealth then
                     local healthPercent = humanoid.Health / humanoid.MaxHealth
                     local barHeight = height * healthPercent
@@ -640,7 +852,6 @@ local function ToggleESP(state)
     end
 end
 
--- Eventos de jogadores
 Players.PlayerAdded:Connect(function(player)
     if SavedStates.ESPEnabled then
         task.wait(1)
@@ -685,7 +896,7 @@ local function ToggleFullbright(state)
 end
 
 -- ════════════════════════════════════════════════════════════
--- CRIAÇÃO DA GUI (NOVO LAYOUT)
+-- CRIAÇÃO DA GUI
 -- ════════════════════════════════════════════════════════════
 local function CreateGUI()
     if GUI then
@@ -698,7 +909,6 @@ local function CreateGUI()
     GUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     GUI.Parent = LocalPlayer:WaitForChild("PlayerGui")
     
-    -- Container Principal (maior para novo layout)
     local main = Instance.new("Frame")
     main.Name = "Main"
     main.Size = UDim2.new(0, 750, 0, 520)
@@ -709,10 +919,9 @@ local function CreateGUI()
     
     Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
     local mainStroke = Instance.new("UIStroke", main)
-    mainStroke.Color = CONFIG.COR_ROXO
+    mainStroke.Color = GetCurrentColor()
     mainStroke.Thickness = 2
     
-    -- Header
     local header = Instance.new("Frame")
     header.Name = "Header"
     header.Size = UDim2.new(1, 0, 0, 50)
@@ -727,7 +936,7 @@ local function CreateGUI()
     logo.Position = UDim2.new(0, 20, 0, 0)
     logo.BackgroundTransparency = 1
     logo.Text = "🟣 SHAKA HUB"
-    logo.TextColor3 = CONFIG.COR_ROXO
+    logo.TextColor3 = GetCurrentColor()
     logo.TextSize = 22
     logo.Font = Enum.Font.GothamBold
     logo.TextXAlignment = Enum.TextXAlignment.Left
@@ -736,7 +945,7 @@ local function CreateGUI()
     local version = Instance.new("TextLabel")
     version.Size = UDim2.new(0, 65, 0, 24)
     version.Position = UDim2.new(0, 175, 0, 13)
-    version.BackgroundColor3 = CONFIG.COR_ROXO
+    version.BackgroundColor3 = GetCurrentColor()
     version.Text = CONFIG.VERSAO
     version.TextColor3 = CONFIG.COR_TEXTO
     version.TextSize = 13
@@ -801,23 +1010,20 @@ local function CreateGUI()
         end
     end)
     
-    -- ════════════════════════════════════════════════════════════
-    -- NOVO LAYOUT: Lista de Jogadores à Esquerda, Funções à Direita
-    -- ════════════════════════════════════════════════════════════
-    
-    -- Container da Lista de Jogadores (ESQUERDA)
+    -- Lista de Jogadores
     local playerListContainer = Instance.new("Frame")
     playerListContainer.Size = UDim2.new(0, 240, 1, -60)
     playerListContainer.Position = UDim2.new(0, 10, 0, 55)
     playerListContainer.BackgroundColor3 = CONFIG.COR_FUNDO_2
     playerListContainer.BorderSizePixel = 0
+    playerListContainer.Visible = false
     playerListContainer.Parent = main
     
     Instance.new("UICorner", playerListContainer).CornerRadius = UDim.new(0, 10)
     
     local playerListTitle = Instance.new("TextLabel")
     playerListTitle.Size = UDim2.new(1, 0, 0, 35)
-    playerListTitle.BackgroundColor3 = CONFIG.COR_ROXO
+    playerListTitle.BackgroundColor3 = GetCurrentColor()
     playerListTitle.Text = "🎯 JOGADORES ONLINE"
     playerListTitle.TextColor3 = CONFIG.COR_TEXTO
     playerListTitle.TextSize = 14
@@ -846,7 +1052,7 @@ local function CreateGUI()
     playerScroll.BackgroundTransparency = 1
     playerScroll.BorderSizePixel = 0
     playerScroll.ScrollBarThickness = 4
-    playerScroll.ScrollBarImageColor3 = CONFIG.COR_ROXO
+    playerScroll.ScrollBarImageColor3 = GetCurrentColor()
     playerScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
     playerScroll.Parent = playerListContainer
     
@@ -859,7 +1065,6 @@ local function CreateGUI()
         playerScroll.CanvasSize = UDim2.new(0, 0, 0, playerLayout.AbsoluteContentSize.Y + 5)
     end)
     
-    -- Atualizar lista de jogadores
     local function UpdatePlayerList()
         playerScroll:ClearAllChildren()
         
@@ -888,13 +1093,13 @@ local function CreateGUI()
                 Instance.new("UICorner", playerBtn).CornerRadius = UDim.new(0, 6)
                 
                 if SelectedPlayer == player then
-                    playerBtn.BackgroundColor3 = CONFIG.COR_ROXO
+                    playerBtn.BackgroundColor3 = GetCurrentColor()
                 end
                 
                 playerBtn.MouseButton1Click:Connect(function()
                     SelectedPlayer = player
                     selectedLabel.Text = "👤 " .. player.Name
-                    selectedLabel.TextColor3 = CONFIG.COR_ROXO
+                    selectedLabel.TextColor3 = GetCurrentColor()
                     
                     for _, btn in pairs(playerScroll:GetChildren()) do
                         if btn:IsA("TextButton") then
@@ -902,7 +1107,7 @@ local function CreateGUI()
                         end
                     end
                     
-                    Tween(playerBtn, {BackgroundColor3 = CONFIG.COR_ROXO}, 0.1)
+                    Tween(playerBtn, {BackgroundColor3 = GetCurrentColor()}, 0.1)
                 end)
                 
                 playerBtn.MouseEnter:Connect(function()
@@ -929,15 +1134,14 @@ local function CreateGUI()
         end
     end)
     
-    -- Container de Abas (DIREITA)
+    -- Container de Abas
     local tabContainer = Instance.new("Frame")
-    tabContainer.Size = UDim2.new(0, 480, 1, -60)
-    tabContainer.Position = UDim2.new(0, 260, 0, 55)
+    tabContainer.Size = UDim2.new(0, 720, 1, -60)
+    tabContainer.Position = UDim2.new(0, 10, 0, 55)
     tabContainer.BackgroundTransparency = 1
     tabContainer.BorderSizePixel = 0
     tabContainer.Parent = main
     
-    -- Barra de Abas
     local tabBar = Instance.new("Frame")
     tabBar.Size = UDim2.new(1, 0, 0, 45)
     tabBar.BackgroundTransparency = 1
@@ -950,7 +1154,6 @@ local function CreateGUI()
     tabBarLayout.SortOrder = Enum.SortOrder.LayoutOrder
     tabBarLayout.Parent = tabBar
     
-    -- Conteúdo das Abas
     local tabContent = Instance.new("Frame")
     tabContent.Size = UDim2.new(1, 0, 1, -50)
     tabContent.Position = UDim2.new(0, 0, 0, 50)
@@ -959,17 +1162,17 @@ local function CreateGUI()
     tabContent.Parent = tabContainer
     
     local tabs = {
-        {Name = "Player", Icon = "👤"},
-        {Name = "Combat", Icon = "⚔️"},
-        {Name = "Teleport", Icon = "📍"},
-        {Name = "ESP", Icon = "👁️"},
-        {Name = "Visual", Icon = "✨"}
+        {Name = "Player", Icon = "👤", ShowPlayerList = false},
+        {Name = "Combat", Icon = "⚔️", ShowPlayerList = true},
+        {Name = "Teleport", Icon = "📍", ShowPlayerList = true},
+        {Name = "ESP", Icon = "👁️", ShowPlayerList = false},
+        {Name = "Visual", Icon = "✨", ShowPlayerList = false},
+        {Name = "Config", Icon = "⚙️", ShowPlayerList = false}
     }
     
     local currentTab = "Player"
     local tabFrames = {}
     
-    -- Função para criar Toggle (com estado salvo)
     local function CreateToggle(name, desc, savedKey, callback, parent)
         local toggle = Instance.new("Frame")
         toggle.Size = UDim2.new(1, -10, 0, 65)
@@ -1020,11 +1223,10 @@ local function CreateGUI()
         
         Instance.new("UICorner", knob).CornerRadius = UDim.new(0, 11)
         
-        -- Restaurar estado salvo
         local state = SavedStates[savedKey] or false
         
         if state then
-            btn.BackgroundColor3 = CONFIG.COR_ROXO
+            btn.BackgroundColor3 = GetCurrentColor()
             knob.Position = UDim2.new(0, 31, 0, 2)
         end
         
@@ -1035,7 +1237,7 @@ local function CreateGUI()
             SavedStates[savedKey] = state
             
             if state then
-                Tween(btn, {BackgroundColor3 = CONFIG.COR_ROXO}, 0.15)
+                Tween(btn, {BackgroundColor3 = GetCurrentColor()}, 0.15)
                 Tween(knob, {Position = UDim2.new(0, 31, 0, 2)}, 0.15)
             else
                 Tween(btn, {BackgroundColor3 = Color3.fromRGB(50, 50, 60)}, 0.15)
@@ -1048,7 +1250,6 @@ local function CreateGUI()
         return toggle
     end
     
-    -- Função para criar Slider (com valor salvo)
     local function CreateSlider(name, min, max, savedKey, callback, parent)
         local slider = Instance.new("Frame")
         slider.Size = UDim2.new(1, -10, 0, 75)
@@ -1076,7 +1277,7 @@ local function CreateGUI()
         valueLabel.Position = UDim2.new(0.7, 0, 0, 8)
         valueLabel.BackgroundTransparency = 1
         valueLabel.Text = tostring(default)
-        valueLabel.TextColor3 = CONFIG.COR_ROXO
+        valueLabel.TextColor3 = GetCurrentColor()
         valueLabel.TextSize = 15
         valueLabel.Font = Enum.Font.GothamBold
         valueLabel.TextXAlignment = Enum.TextXAlignment.Right
@@ -1093,7 +1294,7 @@ local function CreateGUI()
         
         local fill = Instance.new("Frame")
         fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
-        fill.BackgroundColor3 = CONFIG.COR_ROXO
+        fill.BackgroundColor3 = GetCurrentColor()
         fill.BorderSizePixel = 0
         fill.Parent = track
         
@@ -1149,11 +1350,10 @@ local function CreateGUI()
         return slider
     end
     
-    -- Função para criar Botão
     local function CreateButton(text, callback, parent)
         local btn = Instance.new("TextButton")
         btn.Size = UDim2.new(1, -10, 0, 45)
-        btn.BackgroundColor3 = CONFIG.COR_ROXO
+        btn.BackgroundColor3 = GetCurrentColor()
         btn.Text = text
         btn.TextColor3 = CONFIG.COR_TEXTO
         btn.TextSize = 15
@@ -1164,11 +1364,11 @@ local function CreateGUI()
         Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
         
         btn.MouseEnter:Connect(function()
-            Tween(btn, {BackgroundColor3 = CONFIG.COR_ROXO_HOVER}, 0.15)
+            Tween(btn, {BackgroundColor3 = GetCurrentColorHover()}, 0.15)
         end)
         
         btn.MouseLeave:Connect(function()
-            Tween(btn, {BackgroundColor3 = CONFIG.COR_ROXO}, 0.15)
+            Tween(btn, {BackgroundColor3 = GetCurrentColor()}, 0.15)
         end)
         
         btn.MouseButton1Click:Connect(callback)
@@ -1176,10 +1376,9 @@ local function CreateGUI()
         return btn
     end
     
-    -- Criar Botões de Abas e Frames de Conteúdo
     for i, tab in ipairs(tabs) do
         local tabBtn = Instance.new("TextButton")
-        tabBtn.Size = UDim2.new(0, 90, 0, 40)
+        tabBtn.Size = UDim2.new(0, 115, 0, 40)
         tabBtn.BackgroundColor3 = CONFIG.COR_FUNDO_2
         tabBtn.Text = tab.Icon .. " " .. tab.Name
         tabBtn.TextColor3 = CONFIG.COR_TEXTO
@@ -1195,7 +1394,7 @@ local function CreateGUI()
         tabFrame.BackgroundTransparency = 1
         tabFrame.BorderSizePixel = 0
         tabFrame.ScrollBarThickness = 4
-        tabFrame.ScrollBarImageColor3 = CONFIG.COR_ROXO
+        tabFrame.ScrollBarImageColor3 = GetCurrentColor()
         tabFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
         tabFrame.Visible = false
         tabFrame.Parent = tabContent
@@ -1214,6 +1413,16 @@ local function CreateGUI()
         tabBtn.MouseButton1Click:Connect(function()
             currentTab = tab.Name
             
+            if tab.ShowPlayerList then
+                playerListContainer.Visible = true
+                tabContainer.Size = UDim2.new(0, 480, 1, -60)
+                tabContainer.Position = UDim2.new(0, 260, 0, 55)
+            else
+                playerListContainer.Visible = false
+                tabContainer.Size = UDim2.new(0, 720, 1, -60)
+                tabContainer.Position = UDim2.new(0, 10, 0, 55)
+            end
+            
             for name, frame in pairs(tabFrames) do
                 frame.Visible = (name == tab.Name)
             end
@@ -1224,18 +1433,19 @@ local function CreateGUI()
                 end
             end
             
-            Tween(tabBtn, {BackgroundColor3 = CONFIG.COR_ROXO}, 0.15)
+            Tween(tabBtn, {BackgroundColor3 = GetCurrentColor()}, 0.15)
         end)
         
         if i == 1 then
-            tabBtn.BackgroundColor3 = CONFIG.COR_ROXO
+            tabBtn.BackgroundColor3 = GetCurrentColor()
             tabFrame.Visible = true
+            playerListContainer.Visible = false
+            tabContainer.Size = UDim2.new(0, 720, 1, -60)
+            tabContainer.Position = UDim2.new(0, 10, 0, 55)
         end
     end
     
-    -- ════════════════════════════════════════════════════════════
-    -- PREENCHER ABAS COM FUNCIONALIDADES
-    -- ════════════════════════════════════════════════════════════
+    -- CONTEÚDO DAS ABAS
     
     -- ABA PLAYER
     CreateToggle("✈️ Fly", "Voar pelo mapa com WASD/Space/Shift", "FlyEnabled", ToggleFly, tabFrames["Player"])
@@ -1285,40 +1495,11 @@ local function CreateGUI()
     CreateButton("🔥 Incendiar Jogador", BurnPlayer, tabFrames["Combat"])
     CreateButton("🌪️ Arremessar Jogador", FlingPlayer, tabFrames["Combat"])
     CreateButton("❄️ Congelar Jogador", FreezePlayer, tabFrames["Combat"])
-    
-    CreateButton("⚡ Shock Jogador", function()
-        if not SelectedPlayer then
-            Notify("⚠️ Selecione um jogador primeiro!", CONFIG.COR_ERRO)
-            return
-        end
-        
-        local targetChar = SelectedPlayer.Character
-        if targetChar then
-            local root = targetChar:FindFirstChild("HumanoidRootPart")
-            if root then
-                local sparkles = Instance.new("Sparkles")
-                sparkles.Parent = root
-                
-                for i = 1, 5 do
-                    local beam = Instance.new("Part")
-                    beam.Size = Vector3.new(0.5, 10, 0.5)
-                    beam.Position = root.Position + Vector3.new(math.random(-5, 5), 10, math.random(-5, 5))
-                    beam.Anchored = true
-                    beam.CanCollide = false
-                    beam.BrickColor = BrickColor.new("Electric blue")
-                    beam.Material = Enum.Material.Neon
-                    beam.Parent = workspace
-                    
-                    task.spawn(function()
-                        task.wait(0.5)
-                        beam:Destroy()
-                    end)
-                end
-                
-                Notify("⚡ Shock aplicado!", CONFIG.COR_SUCESSO)
-            end
-        end
-    end, tabFrames["Combat"])
+    CreateButton("🔥 Descongelar Jogador", UnfreezePlayer, tabFrames["Combat"])
+    CreateButton("🌀 Girar Jogador", SpinPlayer, tabFrames["Combat"])
+    CreateButton("🚀 Lançar para Cima", LaunchPlayer, tabFrames["Combat"])
+    CreateButton("👻 Tornar Invisível", InvisiblePlayer, tabFrames["Combat"])
+    CreateButton("💥 Crash Jogador (Lag)", CrashPlayer, tabFrames["Combat"])
     
     -- ABA TELEPORT
     CreateButton("🚀 Teleportar para Jogador", TeleportToPlayer, tabFrames["Teleport"])
@@ -1504,7 +1685,7 @@ local function CreateGUI()
         Notify("🎨 Céu alterado!", CONFIG.COR_SUCESSO)
     end, tabFrames["Visual"])
     
-    CreateButton("🌈 Modo Rainbow", function()
+    CreateButton("🌈 Modo Rainbow (Lighting)", function()
         if Connections.Rainbow then
             Connections.Rainbow:Disconnect()
             Connections.Rainbow = nil
@@ -1535,19 +1716,183 @@ local function CreateGUI()
         Notify("⚡ FPS otimizado!", CONFIG.COR_SUCESSO)
     end, tabFrames["Visual"])
     
-    -- Animação de entrada
+    -- ABA CONFIG
+    local colorTitle = Instance.new("TextLabel")
+    colorTitle.Size = UDim2.new(1, -10, 0, 35)
+    colorTitle.BackgroundColor3 = GetCurrentColor()
+    colorTitle.Text = "🎨 CUSTOMIZAÇÃO DE CORES"
+    colorTitle.TextColor3 = CONFIG.COR_TEXTO
+    colorTitle.TextSize = 14
+    colorTitle.Font = Enum.Font.GothamBold
+    colorTitle.BorderSizePixel = 0
+    colorTitle.Parent = tabFrames["Config"]
+    Instance.new("UICorner", colorTitle).CornerRadius = UDim.new(0, 8)
+    
+    CreateToggle("🌈 Modo Rainbow (Menu)", "Cores do menu mudam constantemente", "MenuRainbowMode", function(state)
+        CONFIG.RAINBOW_MODE = state
+        
+        if Connections.MenuRainbow then
+            Connections.MenuRainbow:Disconnect()
+            Connections.MenuRainbow = nil
+        end
+        
+        if state then
+            Connections.MenuRainbow = RunService.Heartbeat:Connect(function()
+                RainbowHue = (RainbowHue + 0.005) % 1
+            end)
+            
+            Notify("🌈 Modo Rainbow do Menu ativado!", CONFIG.COR_SUCESSO)
+        else
+            CONFIG.COR_CUSTOM = nil
+            Notify("🌈 Modo Rainbow desativado", CONFIG.COR_ERRO)
+        end
+    end, tabFrames["Config"])
+    
+    CreateSlider("🔴 Vermelho (R)", 0, 255, "ColorR", function(value)
+        if not CONFIG.RAINBOW_MODE then
+            local r = value / 255
+            local g = (SavedStates.ColorG or 0) / 255
+            local b = (SavedStates.ColorB or 255) / 255
+            CONFIG.COR_CUSTOM = Color3.new(r, g, b)
+            CONFIG.COR_ROXO = CONFIG.COR_CUSTOM
+        end
+    end, tabFrames["Config"])
+    
+    CreateSlider("🟢 Verde (G)", 0, 255, "ColorG", function(value)
+        if not CONFIG.RAINBOW_MODE then
+            local r = (SavedStates.ColorR or 139) / 255
+            local g = value / 255
+            local b = (SavedStates.ColorB or 255) / 255
+            CONFIG.COR_CUSTOM = Color3.new(r, g, b)
+            CONFIG.COR_ROXO = CONFIG.COR_CUSTOM
+        end
+    end, tabFrames["Config"])
+    
+    CreateSlider("🔵 Azul (B)", 0, 255, "ColorB", function(value)
+        if not CONFIG.RAINBOW_MODE then
+            local r = (SavedStates.ColorR or 139) / 255
+            local g = (SavedStates.ColorG or 0) / 255
+            local b = value / 255
+            CONFIG.COR_CUSTOM = Color3.new(r, g, b)
+            CONFIG.COR_ROXO = CONFIG.COR_CUSTOM
+        end
+    end, tabFrames["Config"])
+    
+    local presetColors = {
+        {Name = "🟣 Roxo Original", Color = Color3.fromRGB(139, 0, 255)},
+        {Name = "🔴 Vermelho", Color = Color3.fromRGB(255, 0, 0)},
+        {Name = "🔵 Azul", Color = Color3.fromRGB(0, 100, 255)},
+        {Name = "🟢 Verde", Color = Color3.fromRGB(0, 255, 100)},
+        {Name = "🟡 Amarelo", Color = Color3.fromRGB(255, 220, 0)},
+        {Name = "🟠 Laranja", Color = Color3.fromRGB(255, 140, 0)},
+        {Name = "💗 Rosa", Color = Color3.fromRGB(255, 0, 150)},
+        {Name = "🔵 Ciano", Color = Color3.fromRGB(0, 255, 255)}
+    }
+    
+    for _, preset in ipairs(presetColors) do
+        CreateButton(preset.Name, function()
+            if CONFIG.RAINBOW_MODE then
+                Notify("⚠️ Desative o Modo Rainbow primeiro!", CONFIG.COR_ERRO)
+                return
+            end
+            
+            CONFIG.COR_CUSTOM = preset.Color
+            CONFIG.COR_ROXO = preset.Color
+            
+            SavedStates.ColorR = math.floor(preset.Color.R * 255)
+            SavedStates.ColorG = math.floor(preset.Color.G * 255)
+            SavedStates.ColorB = math.floor(preset.Color.B * 255)
+            
+            Notify("Cor alterada!", CONFIG.COR_SUCESSO)
+            
+            task.wait(0.2)
+            CreateGUI()
+            ReloadSavedStates()
+        end, tabFrames["Config"])
+    end
+    
+    CreateButton("🔄 Resetar para Roxo Original", function()
+        CONFIG.RAINBOW_MODE = false
+        CONFIG.COR_CUSTOM = nil
+        CONFIG.COR_ROXO = Color3.fromRGB(139, 0, 255)
+        
+        SavedStates.ColorR = 139
+        SavedStates.ColorG = 0
+        SavedStates.ColorB = 255
+        SavedStates.MenuRainbowMode = false
+        
+        if Connections.MenuRainbow then
+            Connections.MenuRainbow:Disconnect()
+            Connections.MenuRainbow = nil
+        end
+        
+        Notify("Cores resetadas", CONFIG.COR_SUCESSO)
+        
+        task.wait(0.2)
+        CreateGUI()
+        ReloadSavedStates()
+    end, tabFrames["Config"])
+    
+    local separator = Instance.new("Frame")
+    separator.Size = UDim2.new(1, -10, 0, 2)
+    separator.BackgroundColor3 = CONFIG.COR_FUNDO_2
+    separator.BorderSizePixel = 0
+    separator.Parent = tabFrames["Config"]
+    
+    local otherTitle = Instance.new("TextLabel")
+    otherTitle.Size = UDim2.new(1, -10, 0, 35)
+    otherTitle.BackgroundColor3 = GetCurrentColor()
+    otherTitle.Text = "⚙️ OUTRAS CONFIGURAÇÕES"
+    otherTitle.TextColor3 = CONFIG.COR_TEXTO
+    otherTitle.TextSize = 14
+    otherTitle.Font = Enum.Font.GothamBold
+    otherTitle.BorderSizePixel = 0
+    otherTitle.Parent = tabFrames["Config"]
+    Instance.new("UICorner", otherTitle).CornerRadius = UDim.new(0, 8)
+    
+    CreateButton("🗑️ Limpar Todos os Estados", function()
+        for key, _ in pairs(SavedStates) do
+            SavedStates[key] = nil
+        end
+        
+        for _, conn in pairs(Connections) do
+            if conn and conn.Disconnect then
+                conn:Disconnect()
+            end
+        end
+        Connections = {}
+        
+        Notify("✅ Estados limpos!", CONFIG.COR_SUCESSO)
+        
+        task.wait(1)
+        CreateGUI()
+    end, tabFrames["Config"])
+    
+    CreateButton("📋 Informações do Sistema", function()
+        local info = string.format([[
+🟣 SHAKA Hub %s
+━━━━━━━━━━━━━━━━━
+📊 FPS: %d
+👥 Jogadores: %d
+🎮 Jogo: %s
+        ]],
+            CONFIG.VERSAO,
+            math.floor(workspace:GetRealPhysicsFPS()),
+            #Players:GetPlayers(),
+            game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name or "Desconhecido"
+        )
+        
+        Notify(info, GetCurrentColor())
+    end, tabFrames["Config"])
+    
     main.Size = UDim2.new(0, 0, 0, 0)
     Tween(main, {Size = UDim2.new(0, 750, 0, 520)}, 0.3)
     
     Log("Menu carregado com sucesso!")
-    Notify("🟣 SHAKA Hub " .. CONFIG.VERSAO .. " carregado!", CONFIG.COR_ROXO)
+    Notify("🟣 SHAKA Hub " .. CONFIG.VERSAO .. " carregado!", GetCurrentColor())
 end
 
--- ════════════════════════════════════════════════════════════
--- RECARREGAR ESTADOS SALVOS AO ABRIR O MENU
--- ════════════════════════════════════════════════════════════
 local function ReloadSavedStates()
-    -- Reaplica todos os estados que estavam ativos
     if SavedStates.FlyEnabled then
         ToggleFly(true)
     end
@@ -1583,11 +1928,17 @@ local function ReloadSavedStates()
     
     Camera.FieldOfView = SavedStates.FOV
     Lighting.Brightness = SavedStates.Brightness
+    
+    if SavedStates.MenuRainbowMode then
+        CONFIG.RAINBOW_MODE = true
+    end
+    
+    if SavedStates.ColorR and SavedStates.ColorG and SavedStates.ColorB then
+        CONFIG.COR_CUSTOM = Color3.fromRGB(SavedStates.ColorR, SavedStates.ColorG, SavedStates.ColorB)
+        CONFIG.COR_ROXO = CONFIG.COR_CUSTOM
+    end
 end
 
--- ════════════════════════════════════════════════════════════
--- INICIALIZAÇÃO
--- ════════════════════════════════════════════════════════════
 Log("════════════════════════════════════════")
 Log("  SHAKA Hub Premium " .. CONFIG.VERSAO)
 Log("  Inicializando sistema...")
@@ -1598,7 +1949,6 @@ task.wait(0.5)
 CreateGUI()
 ReloadSavedStates()
 
--- Toggle com tecla F
 UserInputService.InputBegan:Connect(function(input, gpe)
     if gpe then return end
     
@@ -1616,11 +1966,10 @@ UserInputService.InputBegan:Connect(function(input, gpe)
             CreateGUI()
             ReloadSavedStates()
             
-            -- Atualizar toggles visuais
             task.wait(0.1)
             for key, btn in pairs(ToggleStates) do
                 if SavedStates[key] then
-                    btn.BackgroundColor3 = CONFIG.COR_ROXO
+                    btn.BackgroundColor3 = GetCurrentColor()
                     local knob = btn:FindFirstChildOfClass("Frame")
                     if knob then
                         knob.Position = UDim2.new(0, 31, 0, 2)
@@ -1633,7 +1982,6 @@ UserInputService.InputBegan:Connect(function(input, gpe)
     end
 end)
 
--- Reconectar jogador ao resetar
 LocalPlayer.CharacterAdded:Connect(function()
     task.wait(1)
     ReloadSavedStates()
