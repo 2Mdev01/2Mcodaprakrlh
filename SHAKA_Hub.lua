@@ -988,6 +988,119 @@ end
 -- ════════════════════════════════════════════════════════════
 -- CRIAÇÃO DA GUI (ESTILO GTA RP)
 -- ════════════════════════════════════════════════════════════
+local function CreateFloatingButton()
+    if not GUI then return end
+    
+    local floatingBtn = Instance.new("ImageButton")
+    floatingBtn.Name = "FloatingButton"
+    floatingBtn.Size = UDim2.new(0, 70, 0, 70)
+    floatingBtn.Position = UDim2.new(1, -90, 0, 20)
+    floatingBtn.BackgroundColor3 = CONFIG.COR_FUNDO
+    floatingBtn.BackgroundTransparency = 0.1
+    floatingBtn.BorderSizePixel = 0
+    floatingBtn.Image = ""
+    floatingBtn.Parent = GUI
+    floatingBtn.ZIndex = 999
+    
+    Instance.new("UICorner", floatingBtn).CornerRadius = UDim.new(0, 35)
+    
+    local glow = Instance.new("UIStroke", floatingBtn)
+    glow.Color = GetCurrentColor()
+    glow.Thickness = 3
+    glow.Transparency = 0
+    glow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    glow:SetAttribute("StrokeUpdate", true)
+    table.insert(UIElements, glow)
+    
+    local logo = Instance.new("TextLabel")
+    logo.Size = UDim2.new(1, 0, 0, 30)
+    logo.Position = UDim2.new(0, 0, 0, 8)
+    logo.BackgroundTransparency = 1
+    logo.Text = "SHAKA"
+    logo.TextColor3 = GetCurrentColor()
+    logo.TextSize = 16
+    logo.Font = Enum.Font.GothamBold
+    logo.Parent = floatingBtn
+    logo:SetAttribute("TextColorUpdate", true)
+    table.insert(UIElements, logo)
+    
+    local version = Instance.new("TextLabel")
+    version.Size = UDim2.new(1, 0, 0, 18)
+    version.Position = UDim2.new(0, 0, 0, 35)
+    version.BackgroundTransparency = 1
+    version.Text = CONFIG.VERSAO
+    version.TextColor3 = CONFIG.COR_TEXTO_SEC
+    version.TextSize = 10
+    version.Font = Enum.Font.Gotham
+    version.Parent = floatingBtn
+    
+    -- Efeito pulsante
+    task.spawn(function()
+        while floatingBtn and floatingBtn.Parent do
+            Tween(floatingBtn, {Size = UDim2.new(0, 75, 0, 75)}, 0.8)
+            task.wait(0.8)
+            Tween(floatingBtn, {Size = UDim2.new(0, 70, 0, 70)}, 0.8)
+            task.wait(0.8)
+        end
+    end)
+    
+    -- Sistema de arrastar (Mobile Support)
+    local dragging = false
+    local dragInput, dragStart, startPos
+    
+    floatingBtn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = floatingBtn.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    
+    floatingBtn.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and dragInput and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            floatingBtn.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+    
+    -- Click para abrir/fechar menu
+    floatingBtn.MouseButton1Click:Connect(function()
+        local main = GUI:FindFirstChild("Main")
+        if main then
+            if main.Visible then
+                Tween(main, {Position = UDim2.new(1, 50, 0.5, -290)}, 0.3)
+                task.wait(0.3)
+                main.Visible = false
+                floatingBtn.Visible = true
+            else
+                main.Visible = true
+                main.Position = UDim2.new(1, 50, 0.5, -290)
+                Tween(main, {Position = UDim2.new(1, -440, 0.5, -290)}, 0.3)
+                floatingBtn.Visible = true
+            end
+        end
+    end)
+    
+    return floatingBtn
+end
+
 local function CreateGUI()
     if GUI then
         GUI:Destroy()
@@ -1084,8 +1197,11 @@ local function CreateGUI()
     closeBtn.MouseButton1Click:Connect(function()
         Tween(main, {Position = UDim2.new(1, 50, 0.5, -(baseHeight * scale)/2)}, 0.3)
         task.wait(0.3)
-        GUI:Destroy()
-        GUI = nil
+        main.Visible = false
+        local floatingBtn = GUI:FindFirstChild("FloatingButton")
+        if floatingBtn then
+            floatingBtn.Visible = true
+        end
     end)
     
     closeBtn.MouseEnter:Connect(function()
@@ -2050,8 +2166,11 @@ local function CreateGUI()
     main.Position = UDim2.new(1, 50, 0.5, -(baseHeight * scale)/2)
     Tween(main, {Position = UDim2.new(1, -((baseWidth * scale) + 20), 0.5, -(baseHeight * scale)/2)}, 0.4)
     
+    -- Criar botão flutuante
+    CreateFloatingButton()
+    
     Log("Menu GTA RP carregado!")
-    Notify("🟣 SHAKA Hub " .. CONFIG.VERSAO .. " carregado!\nPressione F para fechar/abrir", GetCurrentColor())
+    Notify("🟣 SHAKA Hub " .. CONFIG.VERSAO .. " carregado!\nToque no botão flutuante ou pressione F", GetCurrentColor())
 end
 
 -- ════════════════════════════════════════════════════════════
@@ -2103,17 +2222,31 @@ UserInputService.InputBegan:Connect(function(input, gpe)
     if input.KeyCode == Enum.KeyCode.F then
         if GUI then
             local main = GUI:FindFirstChild("Main")
+            local floatingBtn = GUI:FindFirstChild("FloatingButton")
+            
             if main then
-                Tween(main, {Position = UDim2.new(1, 50, 0.5, -290)}, 0.3)
-                task.wait(0.3)
+                if main.Visible then
+                    Tween(main, {Position = UDim2.new(1, 50, 0.5, -290)}, 0.3)
+                    task.wait(0.3)
+                    main.Visible = false
+                    if floatingBtn then
+                        floatingBtn.Visible = true
+                    end
+                    Log("Menu fechado")
+                else
+                    main.Visible = true
+                    main.Position = UDim2.new(1, 50, 0.5, -290)
+                    Tween(main, {Position = UDim2.new(1, -440, 0.5, -290)}, 0.3)
+                    if floatingBtn then
+                        floatingBtn.Visible = true
+                    end
+                    Log("Menu aberto")
+                end
             end
-            GUI:Destroy()
-            GUI = nil
-            Log("Menu fechado")
         else
             CreateGUI()
             ReloadSavedStates()
-            Log("Menu aberto")
+            Log("Menu criado")
         end
     end
 end)
