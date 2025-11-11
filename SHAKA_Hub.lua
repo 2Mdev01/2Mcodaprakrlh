@@ -1,5 +1,5 @@
--- SHAKA Hub Premium v9.0 - GTA RP Edition
--- Layout Lateral | Sistema Completo | Ultra Otimizado
+-- SHAKA Hub BETA v1.0 - Mod Menu Premium
+-- Desenvolvido por 2M | Layout Otimizado
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
@@ -13,7 +13,7 @@ local Camera = workspace.CurrentCamera
 -- ════════════════════════════════════════════════════════════
 local CONFIG = {
     NOME = "SHAKA",
-    VERSAO = "v9.0",
+    VERSAO = "BETA v1.0",
     COR_PRINCIPAL = Color3.fromRGB(139, 0, 255),
     COR_FUNDO = Color3.fromRGB(10, 10, 15),
     COR_FUNDO_2 = Color3.fromRGB(18, 18, 25),
@@ -45,15 +45,11 @@ local SavedStates = {
     GodMode = false,
     InvisibleEnabled = false,
     Swim = false,
-    NoFall = false,
-    AutoSprint = false,
     
     -- Combat/Troll
     FollowPlayer = false,
     SpectatePlayer = false,
     OrbitPlayer = false,
-    AnnoyPlayer = false,
-    MirrorPlayer = false,
     
     -- ESP
     ESPEnabled = false,
@@ -73,7 +69,9 @@ local SavedStates = {
     -- Config
     RainbowMode = false,
     CustomColor = nil,
-    MenuScale = 1
+    ColorR = 139,
+    ColorG = 0,
+    ColorB = 255
 }
 
 local ESPObjects = {}
@@ -248,7 +246,7 @@ local function ToggleFly(state)
             end
         end)
         
-        Notify("✈️ Fly ativado! WASD + Space/Shift", CONFIG.COR_SUCESSO)
+        Notify("✈️ Voo ativado! WASD + Space/Shift", CONFIG.COR_SUCESSO)
     else
         if root then
             local gyro = root:FindFirstChild("FlyGyro")
@@ -256,7 +254,7 @@ local function ToggleFly(state)
             if gyro then gyro:Destroy() end
             if velocity then velocity:Destroy() end
         end
-        Notify("✈️ Fly desativado", CONFIG.COR_ERRO)
+        Notify("✈️ Voo desativado", CONFIG.COR_ERRO)
     end
 end
 
@@ -545,127 +543,6 @@ local function ToggleOrbitPlayer(state)
     end
 end
 
-local function DanceOnPlayer()
-    if not SelectedPlayer or not SelectedPlayer.Parent then
-        Notify("⚠️ Selecione um jogador primeiro!", CONFIG.COR_ERRO)
-        return
-    end
-    
-    local char = LocalPlayer.Character
-    local targetChar = SelectedPlayer.Character
-    
-    if not char or not targetChar then
-        Notify("❌ Personagens não encontrados", CONFIG.COR_ERRO)
-        return
-    end
-    
-    local root = char:FindFirstChild("HumanoidRootPart")
-    local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
-    local humanoid = char:FindFirstChildOfClass("Humanoid")
-    
-    if root and targetRoot and humanoid then
-        root.CFrame = targetRoot.CFrame * CFrame.new(0, 0, -2)
-        
-        -- Animação de dança
-        local animator = humanoid:FindFirstChildOfClass("Animator")
-        if animator then
-            -- IDs de animação de dança do Roblox
-            local danceIds = {
-                "rbxassetid://507770239",
-                "rbxassetid://507770453",
-                "rbxassetid://507770677",
-                "rbxassetid://507770897"
-            }
-            
-            local randomDance = danceIds[math.random(1, #danceIds)]
-            local danceAnim = Instance.new("Animation")
-            danceAnim.AnimationId = randomDance
-            
-            local track = animator:LoadAnimation(danceAnim)
-            track:Play()
-            
-            task.delay(5, function()
-                track:Stop()
-            end)
-        end
-        
-        Notify("💃 Dançando em " .. SelectedPlayer.Name, CONFIG.COR_SUCESSO)
-    end
-end
-
-local function TwerkOnPlayer()
-    if not SelectedPlayer or not SelectedPlayer.Parent then
-        Notify("⚠️ Selecione um jogador primeiro!", CONFIG.COR_ERRO)
-        return
-    end
-    
-    local char = LocalPlayer.Character
-    local targetChar = SelectedPlayer.Character
-    
-    if not char or not targetChar then return end
-    
-    local root = char:FindFirstChild("HumanoidRootPart")
-    local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
-    
-    if root and targetRoot then
-        root.CFrame = targetRoot.CFrame * CFrame.new(0, 0, -1.5)
-        
-        -- Animação de rebolar
-        for i = 1, 20 do
-            task.spawn(function()
-                wait(i * 0.1)
-                if root and root.Parent then
-                    root.CFrame = root.CFrame * CFrame.Angles(0, 0, math.rad(10))
-                    wait(0.05)
-                    root.CFrame = root.CFrame * CFrame.Angles(0, 0, math.rad(-10))
-                end
-            end)
-        end
-        
-        Notify("🍑 Rebolando em " .. SelectedPlayer.Name, CONFIG.COR_SUCESSO)
-    end
-end
-
-local function CopyOutfit()
-    if not SelectedPlayer or not SelectedPlayer.Parent then
-        Notify("⚠️ Selecione um jogador primeiro!", CONFIG.COR_ERRO)
-        return
-    end
-    
-    local char = LocalPlayer.Character
-    local targetChar = SelectedPlayer.Character
-    
-    if not char or not targetChar then
-        Notify("❌ Personagens não encontrados", CONFIG.COR_ERRO)
-        return
-    end
-    
-    for _, item in pairs(char:GetChildren()) do
-        if item:IsA("Accessory") or item:IsA("Shirt") or item:IsA("Pants") then
-            item:Destroy()
-        end
-    end
-    
-    for _, item in pairs(targetChar:GetChildren()) do
-        if item:IsA("Accessory") or item:IsA("Shirt") or item:IsA("Pants") then
-            local clone = item:Clone()
-            clone.Parent = char
-        end
-    end
-    
-    for _, part in pairs(char:GetChildren()) do
-        if part:IsA("BasePart") then
-            local targetPart = targetChar:FindFirstChild(part.Name)
-            if targetPart and targetPart:IsA("BasePart") then
-                part.BrickColor = targetPart.BrickColor
-                part.Color = targetPart.Color
-            end
-        end
-    end
-    
-    Notify("👔 Roupa copiada de " .. SelectedPlayer.Name, CONFIG.COR_SUCESSO)
-end
-
 local function FlingPlayer()
     if not SelectedPlayer or not SelectedPlayer.Parent then
         Notify("⚠️ Selecione um jogador válido!", CONFIG.COR_ERRO)
@@ -727,7 +604,7 @@ local function FlingPlayer()
 end
 
 -- ════════════════════════════════════════════════════════════
--- SISTEMA DE ESP (OTIMIZADO E BONITO)
+-- SISTEMA DE ESP
 -- ════════════════════════════════════════════════════════════
 local function ClearESP()
     for _, esp in pairs(ESPObjects) do
@@ -990,65 +867,60 @@ local function ToggleFullbright(state)
 end
 
 -- ════════════════════════════════════════════════════════════
--- CRIAÇÃO DA GUI (ESTILO GTA RP)
+-- CALCULAR DISTÂNCIA DOS JOGADORES
+-- ════════════════════════════════════════════════════════════
+local function GetPlayerDistance(player)
+    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        return math.huge
+    end
+    
+    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+        return math.huge
+    end
+    
+    local distance = (LocalPlayer.Character.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
+    return distance
+end
+
+-- ════════════════════════════════════════════════════════════
+-- CRIAÇÃO DO BOTÃO FLUTUANTE (MINIMALISTA)
 -- ════════════════════════════════════════════════════════════
 local function CreateFloatingButton()
     if not GUI then return end
     
-    local floatingBtn = Instance.new("ImageButton")
+    local floatingBtn = Instance.new("TextButton")
     floatingBtn.Name = "FloatingButton"
-    floatingBtn.Size = UDim2.new(0, 70, 0, 70)
-    floatingBtn.Position = UDim2.new(1, -90, 0, 20)
+    floatingBtn.Size = UDim2.new(0, 50, 0, 50)
+    floatingBtn.Position = UDim2.new(1, -70, 0, 20)
     floatingBtn.BackgroundColor3 = CONFIG.COR_FUNDO
     floatingBtn.BackgroundTransparency = 0.1
     floatingBtn.BorderSizePixel = 0
-    floatingBtn.Image = ""
+    floatingBtn.Text = ""
     floatingBtn.Parent = GUI
     floatingBtn.ZIndex = 999
     
-    Instance.new("UICorner", floatingBtn).CornerRadius = UDim.new(0, 35)
+    Instance.new("UICorner", floatingBtn).CornerRadius = UDim.new(0, 25)
     
     local glow = Instance.new("UIStroke", floatingBtn)
     glow.Color = GetCurrentColor()
-    glow.Thickness = 3
+    glow.Thickness = 2
     glow.Transparency = 0
     glow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     glow:SetAttribute("StrokeUpdate", true)
     table.insert(UIElements, glow)
     
     local logo = Instance.new("TextLabel")
-    logo.Size = UDim2.new(1, 0, 0, 30)
-    logo.Position = UDim2.new(0, 0, 0, 8)
+    logo.Size = UDim2.new(1, 0, 1, 0)
     logo.BackgroundTransparency = 1
-    logo.Text = "SHAKA"
+    logo.Text = "S"
     logo.TextColor3 = GetCurrentColor()
-    logo.TextSize = 16
+    logo.TextSize = 28
     logo.Font = Enum.Font.GothamBold
     logo.Parent = floatingBtn
     logo:SetAttribute("TextColorUpdate", true)
     table.insert(UIElements, logo)
     
-    local version = Instance.new("TextLabel")
-    version.Size = UDim2.new(1, 0, 0, 18)
-    version.Position = UDim2.new(0, 0, 0, 35)
-    version.BackgroundTransparency = 1
-    version.Text = CONFIG.VERSAO
-    version.TextColor3 = CONFIG.COR_TEXTO_SEC
-    version.TextSize = 10
-    version.Font = Enum.Font.Gotham
-    version.Parent = floatingBtn
-    
-    -- Efeito pulsante
-    task.spawn(function()
-        while floatingBtn and floatingBtn.Parent do
-            Tween(floatingBtn, {Size = UDim2.new(0, 75, 0, 75)}, 0.8)
-            task.wait(0.8)
-            Tween(floatingBtn, {Size = UDim2.new(0, 70, 0, 70)}, 0.8)
-            task.wait(0.8)
-        end
-    end)
-    
-    -- Sistema de arrastar (Mobile Support)
+    -- Sistema de arrastar
     local dragging = false
     local dragInput, dragStart, startPos
     
@@ -1089,15 +961,15 @@ local function CreateFloatingButton()
         local main = GUI:FindFirstChild("Main")
         if main then
             if main.Visible then
-                Tween(main, {Position = UDim2.new(1, 50, 0.5, -290)}, 0.3)
+                Tween(main, {Position = UDim2.new(0.5, -200, 1, 50)}, 0.3)
                 task.wait(0.3)
                 main.Visible = false
                 floatingBtn.Visible = true
             else
                 main.Visible = true
-                main.Position = UDim2.new(1, 50, 0.5, -290)
-                Tween(main, {Position = UDim2.new(1, -440, 0.5, -290)}, 0.3)
-                floatingBtn.Visible = true
+                main.Position = UDim2.new(0.5, -200, 1, 50)
+                Tween(main, {Position = UDim2.new(0.5, -200, 0.5, -290)}, 0.3)
+                floatingBtn.Visible = false
             end
         end
     end)
@@ -1105,6 +977,9 @@ local function CreateFloatingButton()
     return floatingBtn
 end
 
+-- ════════════════════════════════════════════════════════════
+-- CRIAÇÃO DA GUI PRINCIPAL
+-- ════════════════════════════════════════════════════════════
 local function CreateGUI()
     if GUI then
         GUI:Destroy()
@@ -1113,24 +988,23 @@ local function CreateGUI()
     UIElements = {}
     
     GUI = Instance.new("ScreenGui")
-    GUI.Name = "SHAKA_HUB_RP"
+    GUI.Name = "SHAKA_HUB_BETA"
     GUI.ResetOnSpawn = false
     GUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     GUI.Parent = LocalPlayer:WaitForChild("PlayerGui")
     
-    local scale = SavedStates.MenuScale or 1
-    local baseWidth, baseHeight = 420, 580
+    local baseWidth, baseHeight = 400, 580
     
     local main = Instance.new("Frame")
     main.Name = "Main"
-    main.Size = UDim2.new(0, baseWidth * scale, 0, baseHeight * scale)
-    main.Position = UDim2.new(1, -((baseWidth * scale) + 20), 0.5, -(baseHeight * scale)/2)
+    main.Size = UDim2.new(0, baseWidth, 0, baseHeight)
+    main.Position = UDim2.new(0.5, -200, 0.5, -290)
     main.BackgroundColor3 = CONFIG.COR_FUNDO
     main.BackgroundTransparency = 0.05
     main.BorderSizePixel = 0
     main.Parent = GUI
     
-    Instance.new("UICorner", main).CornerRadius = UDim.new(0, 14)
+    Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
     
     local mainGlow = Instance.new("UIStroke", main)
     mainGlow.Color = GetCurrentColor()
@@ -1140,16 +1014,16 @@ local function CreateGUI()
     mainGlow:SetAttribute("StrokeUpdate", true)
     table.insert(UIElements, mainGlow)
     
-    -- Header GTA Style
+    -- Header
     local header = Instance.new("Frame")
     header.Name = "Header"
-    header.Size = UDim2.new(1, 0, 0, 60)
+    header.Size = UDim2.new(1, 0, 0, 55)
     header.BackgroundColor3 = CONFIG.COR_FUNDO_2
     header.BackgroundTransparency = 0.1
     header.BorderSizePixel = 0
     header.Parent = main
     
-    Instance.new("UICorner", header).CornerRadius = UDim.new(0, 14)
+    Instance.new("UICorner", header).CornerRadius = UDim.new(0, 12)
     
     local headerLine = Instance.new("Frame")
     headerLine.Size = UDim2.new(1, 0, 0, 2)
@@ -1161,12 +1035,12 @@ local function CreateGUI()
     table.insert(UIElements, headerLine)
     
     local logo = Instance.new("TextLabel")
-    logo.Size = UDim2.new(0, 200, 0, 30)
-    logo.Position = UDim2.new(0, 20, 0, 10)
+    logo.Size = UDim2.new(0, 200, 0, 28)
+    logo.Position = UDim2.new(0, 15, 0, 8)
     logo.BackgroundTransparency = 1
-    logo.Text = "SHAKA"
+    logo.Text = "SHAKA HUB"
     logo.TextColor3 = GetCurrentColor()
-    logo.TextSize = 28
+    logo.TextSize = 24
     logo.Font = Enum.Font.GothamBold
     logo.TextXAlignment = Enum.TextXAlignment.Left
     logo.Parent = header
@@ -1174,10 +1048,10 @@ local function CreateGUI()
     table.insert(UIElements, logo)
     
     local subtitle = Instance.new("TextLabel")
-    subtitle.Size = UDim2.new(0, 200, 0, 20)
-    subtitle.Position = UDim2.new(0, 20, 0, 35)
+    subtitle.Size = UDim2.new(0, 200, 0, 18)
+    subtitle.Position = UDim2.new(0, 15, 0, 32)
     subtitle.BackgroundTransparency = 1
-    subtitle.Text = "GTA RP EDITION • " .. CONFIG.VERSAO
+    subtitle.Text = CONFIG.VERSAO
     subtitle.TextColor3 = CONFIG.COR_TEXTO_SEC
     subtitle.TextSize = 11
     subtitle.Font = Enum.Font.Gotham
@@ -1185,21 +1059,21 @@ local function CreateGUI()
     subtitle.Parent = header
     
     local closeBtn = Instance.new("TextButton")
-    closeBtn.Size = UDim2.new(0, 40, 0, 40)
-    closeBtn.Position = UDim2.new(1, -50, 0, 10)
+    closeBtn.Size = UDim2.new(0, 35, 0, 35)
+    closeBtn.Position = UDim2.new(1, -45, 0, 10)
     closeBtn.BackgroundColor3 = CONFIG.COR_ERRO
     closeBtn.BackgroundTransparency = 0.2
     closeBtn.Text = "×"
     closeBtn.TextColor3 = CONFIG.COR_TEXTO
-    closeBtn.TextSize = 28
+    closeBtn.TextSize = 24
     closeBtn.Font = Enum.Font.GothamBold
     closeBtn.BorderSizePixel = 0
     closeBtn.Parent = header
     
-    Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 10)
+    Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 8)
     
     closeBtn.MouseButton1Click:Connect(function()
-        Tween(main, {Position = UDim2.new(1, 50, 0.5, -(baseHeight * scale)/2)}, 0.3)
+        Tween(main, {Position = UDim2.new(0.5, -200, 1, 50)}, 0.3)
         task.wait(0.3)
         main.Visible = false
         local floatingBtn = GUI:FindFirstChild("FloatingButton")
@@ -1218,15 +1092,15 @@ local function CreateGUI()
     
     -- Content Area
     local content = Instance.new("Frame")
-    content.Size = UDim2.new(1, -20, 1, -80)
-    content.Position = UDim2.new(0, 10, 0, 70)
+    content.Size = UDim2.new(1, -20, 1, -75)
+    content.Position = UDim2.new(0, 10, 0, 65)
     content.BackgroundTransparency = 1
     content.BorderSizePixel = 0
     content.Parent = main
     
-    -- Sidebar (Tabs verticais - GTA Style)
+    -- Sidebar
     local sidebar = Instance.new("Frame")
-    sidebar.Size = UDim2.new(0, 110, 1, 0)
+    sidebar.Size = UDim2.new(0, 100, 1, 0)
     sidebar.BackgroundTransparency = 1
     sidebar.BorderSizePixel = 0
     sidebar.Parent = content
@@ -1240,7 +1114,7 @@ local function CreateGUI()
     sidebarScroll.Parent = sidebar
     
     local sidebarLayout = Instance.new("UIListLayout")
-    sidebarLayout.Padding = UDim.new(0, 8)
+    sidebarLayout.Padding = UDim.new(0, 6)
     sidebarLayout.SortOrder = Enum.SortOrder.LayoutOrder
     sidebarLayout.Parent = sidebarScroll
     
@@ -1250,20 +1124,20 @@ local function CreateGUI()
     
     -- Tab Content Area
     local tabContent = Instance.new("Frame")
-    tabContent.Size = UDim2.new(1, -120, 1, 0)
-    tabContent.Position = UDim2.new(0, 120, 0, 0)
+    tabContent.Size = UDim2.new(1, -110, 1, 0)
+    tabContent.Position = UDim2.new(0, 110, 0, 0)
     tabContent.BackgroundTransparency = 1
     tabContent.BorderSizePixel = 0
     tabContent.Parent = content
     
     local tabs = {
-        {Name = "Player", Icon = "👤", Color = Color3.fromRGB(100, 150, 255)},
-        {Name = "Combat", Icon = "⚔️", Color = Color3.fromRGB(255, 100, 100)},
-        {Name = "Troll", Icon = "😈", Color = Color3.fromRGB(255, 150, 50)},
-        {Name = "Teleport", Icon = "📍", Color = Color3.fromRGB(100, 255, 150)},
-        {Name = "ESP", Icon = "👁️", Color = Color3.fromRGB(255, 200, 50)},
-        {Name = "Visual", Icon = "✨", Color = Color3.fromRGB(200, 100, 255)},
-        {Name = "Config", Icon = "⚙️", Color = Color3.fromRGB(150, 150, 150)}
+        {Name = "Player", Icon = "👤"},
+        {Name = "Combat", Icon = "⚔️"},
+        {Name = "Troll", Icon = "😈"},
+        {Name = "Teleport", Icon = "📍"},
+        {Name = "ESP", Icon = "👁️"},
+        {Name = "Visual", Icon = "✨"},
+        {Name = "Config", Icon = "⚙️"}
     }
     
     local currentTab = "Player"
@@ -1272,7 +1146,7 @@ local function CreateGUI()
     -- Função para criar elementos
     local function CreateToggle(name, callback, parent)
         local toggle = Instance.new("Frame")
-        toggle.Size = UDim2.new(1, -10, 0, 45)
+        toggle.Size = UDim2.new(1, -10, 0, 40)
         toggle.BackgroundColor3 = CONFIG.COR_FUNDO_2
         toggle.BackgroundTransparency = 0.3
         toggle.BorderSizePixel = 0
@@ -1286,34 +1160,34 @@ local function CreateGUI()
         glow.Transparency = 0.5
         
         local nameLabel = Instance.new("TextLabel")
-        nameLabel.Size = UDim2.new(0.7, 0, 1, 0)
-        nameLabel.Position = UDim2.new(0, 12, 0, 0)
+        nameLabel.Size = UDim2.new(0.65, 0, 1, 0)
+        nameLabel.Position = UDim2.new(0, 10, 0, 0)
         nameLabel.BackgroundTransparency = 1
         nameLabel.Text = name
         nameLabel.TextColor3 = CONFIG.COR_TEXTO
-        nameLabel.TextSize = 13
+        nameLabel.TextSize = 12
         nameLabel.Font = Enum.Font.Gotham
         nameLabel.TextXAlignment = Enum.TextXAlignment.Left
         nameLabel.Parent = toggle
         
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0, 45, 0, 24)
-        btn.Position = UDim2.new(1, -55, 0.5, -12)
+        btn.Size = UDim2.new(0, 40, 0, 22)
+        btn.Position = UDim2.new(1, -50, 0.5, -11)
         btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
         btn.Text = ""
         btn.BorderSizePixel = 0
         btn.Parent = toggle
         
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 12)
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 11)
         
         local knob = Instance.new("Frame")
-        knob.Size = UDim2.new(0, 18, 0, 18)
+        knob.Size = UDim2.new(0, 16, 0, 16)
         knob.Position = UDim2.new(0, 3, 0, 3)
         knob.BackgroundColor3 = CONFIG.COR_TEXTO
         knob.BorderSizePixel = 0
         knob.Parent = btn
         
-        Instance.new("UICorner", knob).CornerRadius = UDim.new(0, 9)
+        Instance.new("UICorner", knob).CornerRadius = UDim.new(0, 8)
         
         local state = false
         
@@ -1322,7 +1196,7 @@ local function CreateGUI()
             
             if state then
                 Tween(btn, {BackgroundColor3 = GetCurrentColor()}, 0.2)
-                Tween(knob, {Position = UDim2.new(0, 24, 0, 3)}, 0.2)
+                Tween(knob, {Position = UDim2.new(0, 21, 0, 3)}, 0.2)
                 Tween(glow, {Color = GetCurrentColor(), Transparency = 0}, 0.2)
                 btn:SetAttribute("ColorUpdate", true)
                 table.insert(UIElements, btn)
@@ -1341,7 +1215,7 @@ local function CreateGUI()
     
     local function CreateSlider(name, min, max, default, callback, parent)
         local slider = Instance.new("Frame")
-        slider.Size = UDim2.new(1, -10, 0, 55)
+        slider.Size = UDim2.new(1, -10, 0, 50)
         slider.BackgroundColor3 = CONFIG.COR_FUNDO_2
         slider.BackgroundTransparency = 0.3
         slider.BorderSizePixel = 0
@@ -1355,23 +1229,23 @@ local function CreateGUI()
         glow.Transparency = 0.5
         
         local nameLabel = Instance.new("TextLabel")
-        nameLabel.Size = UDim2.new(0.6, 0, 0, 22)
-        nameLabel.Position = UDim2.new(0, 12, 0, 5)
+        nameLabel.Size = UDim2.new(0.6, 0, 0, 20)
+        nameLabel.Position = UDim2.new(0, 10, 0, 5)
         nameLabel.BackgroundTransparency = 1
         nameLabel.Text = name
         nameLabel.TextColor3 = CONFIG.COR_TEXTO
-        nameLabel.TextSize = 13
+        nameLabel.TextSize = 12
         nameLabel.Font = Enum.Font.Gotham
         nameLabel.TextXAlignment = Enum.TextXAlignment.Left
         nameLabel.Parent = slider
         
         local valueLabel = Instance.new("TextLabel")
-        valueLabel.Size = UDim2.new(0.3, 0, 0, 22)
+        valueLabel.Size = UDim2.new(0.3, 0, 0, 20)
         valueLabel.Position = UDim2.new(0.7, 0, 0, 5)
         valueLabel.BackgroundTransparency = 1
         valueLabel.Text = tostring(default)
         valueLabel.TextColor3 = GetCurrentColor()
-        valueLabel.TextSize = 13
+        valueLabel.TextSize = 12
         valueLabel.Font = Enum.Font.GothamBold
         valueLabel.TextXAlignment = Enum.TextXAlignment.Right
         valueLabel.Parent = slider
@@ -1379,13 +1253,13 @@ local function CreateGUI()
         table.insert(UIElements, valueLabel)
         
         local track = Instance.new("Frame")
-        track.Size = UDim2.new(1, -24, 0, 5)
-        track.Position = UDim2.new(0, 12, 0, 38)
+        track.Size = UDim2.new(1, -20, 0, 4)
+        track.Position = UDim2.new(0, 10, 0, 35)
         track.BackgroundColor3 = CONFIG.COR_FUNDO
         track.BorderSizePixel = 0
         track.Parent = slider
         
-        Instance.new("UICorner", track).CornerRadius = UDim.new(0, 2.5)
+        Instance.new("UICorner", track).CornerRadius = UDim.new(0, 2)
         
         local fill = Instance.new("Frame")
         fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
@@ -1395,16 +1269,16 @@ local function CreateGUI()
         fill:SetAttribute("ColorUpdate", true)
         table.insert(UIElements, fill)
         
-        Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 2.5)
+        Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 2)
         
         local knob = Instance.new("Frame")
-        knob.Size = UDim2.new(0, 13, 0, 13)
-        knob.Position = UDim2.new((default - min) / (max - min), -6.5, 0.5, -6.5)
+        knob.Size = UDim2.new(0, 12, 0, 12)
+        knob.Position = UDim2.new((default - min) / (max - min), -6, 0.5, -6)
         knob.BackgroundColor3 = CONFIG.COR_TEXTO
         knob.BorderSizePixel = 0
         knob.Parent = track
         
-        Instance.new("UICorner", knob).CornerRadius = UDim.new(0, 6.5)
+        Instance.new("UICorner", knob).CornerRadius = UDim.new(0, 6)
         
         local dragging = false
         
@@ -1413,7 +1287,7 @@ local function CreateGUI()
             local value = math.floor(min + (max - min) * pos)
             
             fill.Size = UDim2.new(pos, 0, 1, 0)
-            knob.Position = UDim2.new(pos, -6.5, 0.5, -6.5)
+            knob.Position = UDim2.new(pos, -6, 0.5, -6)
             valueLabel.Text = tostring(value)
             
             callback(value)
@@ -1448,12 +1322,12 @@ local function CreateGUI()
     
     local function CreateButton(text, callback, parent)
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, -10, 0, 40)
+        btn.Size = UDim2.new(1, -10, 0, 36)
         btn.BackgroundColor3 = GetCurrentColor()
         btn.BackgroundTransparency = 0.2
         btn.Text = text
         btn.TextColor3 = CONFIG.COR_TEXTO
-        btn.TextSize = 13
+        btn.TextSize = 12
         btn.Font = Enum.Font.GothamBold
         btn.BorderSizePixel = 0
         btn.Parent = parent
@@ -1486,12 +1360,12 @@ local function CreateGUI()
     
     local function CreateSection(name, parent)
         local section = Instance.new("TextLabel")
-        section.Size = UDim2.new(1, -10, 0, 30)
+        section.Size = UDim2.new(1, -10, 0, 28)
         section.BackgroundColor3 = CONFIG.COR_FUNDO_3
         section.BackgroundTransparency = 0.5
         section.Text = "  " .. name
         section.TextColor3 = GetCurrentColor()
-        section.TextSize = 14
+        section.TextSize = 13
         section.Font = Enum.Font.GothamBold
         section.TextXAlignment = Enum.TextXAlignment.Left
         section.BorderSizePixel = 0
@@ -1504,10 +1378,10 @@ local function CreateGUI()
         return section
     end
     
-    -- Player List (GTA Style)
+    -- Lista de Jogadores Organizada por Distância
     local playerList = Instance.new("Frame")
-    playerList.Size = UDim2.new(0, 180, 1, -70)
-    playerList.Position = UDim2.new(0, 10, 0, 70)
+    playerList.Size = UDim2.new(0, 170, 1, -65)
+    playerList.Position = UDim2.new(0, 10, 0, 65)
     playerList.BackgroundColor3 = CONFIG.COR_FUNDO_2
     playerList.BackgroundTransparency = 0.05
     playerList.BorderSizePixel = 0
@@ -1524,12 +1398,12 @@ local function CreateGUI()
     table.insert(UIElements, plGlow)
     
     local plTitle = Instance.new("TextLabel")
-    plTitle.Size = UDim2.new(1, 0, 0, 35)
+    plTitle.Size = UDim2.new(1, 0, 0, 32)
     plTitle.BackgroundColor3 = GetCurrentColor()
     plTitle.BackgroundTransparency = 0.2
     plTitle.Text = "👥 JOGADORES"
     plTitle.TextColor3 = CONFIG.COR_TEXTO
-    plTitle.TextSize = 13
+    plTitle.TextSize = 12
     plTitle.Font = Enum.Font.GothamBold
     plTitle.BorderSizePixel = 0
     plTitle.Parent = playerList
@@ -1539,13 +1413,13 @@ local function CreateGUI()
     Instance.new("UICorner", plTitle).CornerRadius = UDim.new(0, 12)
     
     local selectedLabel = Instance.new("TextLabel")
-    selectedLabel.Size = UDim2.new(1, -10, 0, 28)
-    selectedLabel.Position = UDim2.new(0, 5, 0, 40)
+    selectedLabel.Size = UDim2.new(1, -10, 0, 26)
+    selectedLabel.Position = UDim2.new(0, 5, 0, 37)
     selectedLabel.BackgroundColor3 = CONFIG.COR_FUNDO
     selectedLabel.BackgroundTransparency = 0.3
     selectedLabel.Text = "Nenhum selecionado"
     selectedLabel.TextColor3 = CONFIG.COR_TEXTO_SEC
-    selectedLabel.TextSize = 11
+    selectedLabel.TextSize = 10
     selectedLabel.Font = Enum.Font.Gotham
     selectedLabel.BorderSizePixel = 0
     selectedLabel.Parent = playerList
@@ -1553,8 +1427,8 @@ local function CreateGUI()
     Instance.new("UICorner", selectedLabel).CornerRadius = UDim.new(0, 7)
     
     local playerScroll = Instance.new("ScrollingFrame")
-    playerScroll.Size = UDim2.new(1, -10, 1, -80)
-    playerScroll.Position = UDim2.new(0, 5, 0, 73)
+    playerScroll.Size = UDim2.new(1, -10, 1, -73)
+    playerScroll.Position = UDim2.new(0, 5, 0, 68)
     playerScroll.BackgroundTransparency = 1
     playerScroll.BorderSizePixel = 0
     playerScroll.ScrollBarThickness = 3
@@ -1570,7 +1444,7 @@ local function CreateGUI()
         end
         
         local playerLayout = Instance.new("UIListLayout")
-        playerLayout.Padding = UDim.new(0, 5)
+        playerLayout.Padding = UDim.new(0, 4)
         playerLayout.SortOrder = Enum.SortOrder.LayoutOrder
         playerLayout.Parent = playerScroll
         
@@ -1578,55 +1452,90 @@ local function CreateGUI()
             playerScroll.CanvasSize = UDim2.new(0, 0, 0, playerLayout.AbsoluteContentSize.Y + 5)
         end)
         
+        -- Organizar jogadores por distância
+        local playerDistances = {}
         for _, player in ipairs(Players:GetPlayers()) do
             if player ~= LocalPlayer then
-                local playerBtn = Instance.new("TextButton")
-                playerBtn.Size = UDim2.new(1, -5, 0, 35)
-                playerBtn.BackgroundColor3 = CONFIG.COR_FUNDO
-                playerBtn.BackgroundTransparency = 0.5
-                playerBtn.Text = " " .. player.Name
-                playerBtn.TextColor3 = CONFIG.COR_TEXTO
-                playerBtn.TextSize = 12
-                playerBtn.Font = Enum.Font.Gotham
-                playerBtn.TextXAlignment = Enum.TextXAlignment.Left
-                playerBtn.BorderSizePixel = 0
-                playerBtn.Parent = playerScroll
+                local distance = GetPlayerDistance(player)
+                table.insert(playerDistances, {Player = player, Distance = distance})
+            end
+        end
+        
+        table.sort(playerDistances, function(a, b)
+            return a.Distance < b.Distance
+        end)
+        
+        for i, data in ipairs(playerDistances) do
+            local player = data.Player
+            local distance = data.Distance
+            
+            local playerBtn = Instance.new("TextButton")
+            playerBtn.Size = UDim2.new(1, -5, 0, 32)
+            playerBtn.BackgroundColor3 = CONFIG.COR_FUNDO
+            playerBtn.BackgroundTransparency = 0.5
+            playerBtn.Text = ""
+            playerBtn.BorderSizePixel = 0
+            playerBtn.Parent = playerScroll
+            playerBtn.LayoutOrder = i
+            
+            Instance.new("UICorner", playerBtn).CornerRadius = UDim.new(0, 7)
+            
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.Size = UDim2.new(1, -35, 1, 0)
+            nameLabel.Position = UDim2.new(0, 8, 0, 0)
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.Text = player.Name
+            nameLabel.TextColor3 = CONFIG.COR_TEXTO
+            nameLabel.TextSize = 11
+            nameLabel.Font = Enum.Font.Gotham
+            nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+            nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+            nameLabel.Parent = playerBtn
+            
+            local distLabel = Instance.new("TextLabel")
+            distLabel.Size = UDim2.new(0, 30, 1, 0)
+            distLabel.Position = UDim2.new(1, -35, 0, 0)
+            distLabel.BackgroundTransparency = 1
+            distLabel.Text = distance == math.huge and "?" or string.format("%dm", math.floor(distance))
+            distLabel.TextColor3 = CONFIG.COR_TEXTO_SEC
+            distLabel.TextSize = 9
+            distLabel.Font = Enum.Font.Gotham
+            distLabel.TextXAlignment = Enum.TextXAlignment.Right
+            distLabel.Parent = playerBtn
+            
+            if SelectedPlayer == player then
+                playerBtn.BackgroundColor3 = GetCurrentColor()
+                playerBtn.BackgroundTransparency = 0.2
+                nameLabel.TextColor3 = CONFIG.COR_TEXTO
+            end
+            
+            playerBtn.MouseButton1Click:Connect(function()
+                SelectedPlayer = player
+                selectedLabel.Text = player.Name
+                selectedLabel.TextColor3 = GetCurrentColor()
                 
-                Instance.new("UICorner", playerBtn).CornerRadius = UDim.new(0, 7)
-                
-                if SelectedPlayer == player then
-                    playerBtn.BackgroundColor3 = GetCurrentColor()
-                    playerBtn.BackgroundTransparency = 0.2
-                    playerBtn.TextColor3 = CONFIG.COR_TEXTO
+                for _, btn in pairs(playerScroll:GetChildren()) do
+                    if btn:IsA("TextButton") then
+                        Tween(btn, {BackgroundColor3 = CONFIG.COR_FUNDO, BackgroundTransparency = 0.5}, 0.15)
+                        local lbl = btn:FindFirstChild("TextLabel")
+                        if lbl then lbl.TextColor3 = CONFIG.COR_TEXTO end
+                    end
                 end
                 
-                playerBtn.MouseButton1Click:Connect(function()
-                    SelectedPlayer = player
-                    selectedLabel.Text = player.Name
-                    selectedLabel.TextColor3 = GetCurrentColor()
-                    
-                    for _, btn in pairs(playerScroll:GetChildren()) do
-                        if btn:IsA("TextButton") then
-                            Tween(btn, {BackgroundColor3 = CONFIG.COR_FUNDO, BackgroundTransparency = 0.5}, 0.15)
-                            btn.TextColor3 = CONFIG.COR_TEXTO
-                        end
-                    end
-                    
-                    Tween(playerBtn, {BackgroundColor3 = GetCurrentColor(), BackgroundTransparency = 0.2}, 0.15)
-                end)
-                
-                playerBtn.MouseEnter:Connect(function()
-                    if SelectedPlayer ~= player then
-                        Tween(playerBtn, {BackgroundTransparency = 0.3}, 0.15)
-                    end
-                end)
-                
-                playerBtn.MouseLeave:Connect(function()
-                    if SelectedPlayer ~= player then
-                        Tween(playerBtn, {BackgroundTransparency = 0.5}, 0.15)
-                    end
-                end)
-            end
+                Tween(playerBtn, {BackgroundColor3 = GetCurrentColor(), BackgroundTransparency = 0.2}, 0.15)
+            end)
+            
+            playerBtn.MouseEnter:Connect(function()
+                if SelectedPlayer ~= player then
+                    Tween(playerBtn, {BackgroundTransparency = 0.3}, 0.15)
+                end
+            end)
+            
+            playerBtn.MouseLeave:Connect(function()
+                if SelectedPlayer ~= player then
+                    Tween(playerBtn, {BackgroundTransparency = 0.5}, 0.15)
+                end
+            end)
         end
     end
     
@@ -1635,15 +1544,15 @@ local function CreateGUI()
     task.spawn(function()
         while GUI do
             UpdatePlayerList()
-            task.wait(3)
+            task.wait(2)
         end
     end)
     
     -- Criar Tabs
     for i, tab in ipairs(tabs) do
-        -- Tab Button (Vertical GTA Style)
+        -- Tab Button
         local tabBtn = Instance.new("TextButton")
-        tabBtn.Size = UDim2.new(1, 0, 0, 55)
+        tabBtn.Size = UDim2.new(1, 0, 0, 50)
         tabBtn.BackgroundColor3 = CONFIG.COR_FUNDO_2
         tabBtn.BackgroundTransparency = 0.3
         tabBtn.Text = ""
@@ -1658,22 +1567,22 @@ local function CreateGUI()
         tabGlow.Transparency = 0.5
         
         local tabIcon = Instance.new("TextLabel")
-        tabIcon.Size = UDim2.new(1, 0, 0, 28)
-        tabIcon.Position = UDim2.new(0, 0, 0, 5)
+        tabIcon.Size = UDim2.new(1, 0, 0, 24)
+        tabIcon.Position = UDim2.new(0, 0, 0, 4)
         tabIcon.BackgroundTransparency = 1
         tabIcon.Text = tab.Icon
         tabIcon.TextColor3 = CONFIG.COR_TEXTO
-        tabIcon.TextSize = 24
+        tabIcon.TextSize = 20
         tabIcon.Font = Enum.Font.GothamBold
         tabIcon.Parent = tabBtn
         
         local tabName = Instance.new("TextLabel")
-        tabName.Size = UDim2.new(1, 0, 0, 18)
-        tabName.Position = UDim2.new(0, 0, 0, 32)
+        tabName.Size = UDim2.new(1, 0, 0, 16)
+        tabName.Position = UDim2.new(0, 0, 0, 28)
         tabName.BackgroundTransparency = 1
         tabName.Text = tab.Name
         tabName.TextColor3 = CONFIG.COR_TEXTO_SEC
-        tabName.TextSize = 10
+        tabName.TextSize = 9
         tabName.Font = Enum.Font.Gotham
         tabName.Parent = tabBtn
         
@@ -1689,7 +1598,7 @@ local function CreateGUI()
         tabFrame.Parent = tabContent
         
         local layout = Instance.new("UIListLayout")
-        layout.Padding = UDim.new(0, 8)
+        layout.Padding = UDim.new(0, 6)
         layout.SortOrder = Enum.SortOrder.LayoutOrder
         layout.Parent = tabFrame
         
@@ -1705,7 +1614,7 @@ local function CreateGUI()
             -- Mostrar/esconder player list
             if tab.Name == "Combat" or tab.Name == "Troll" or tab.Name == "Teleport" then
                 playerList.Visible = true
-                playerList.Position = UDim2.new(0, 10, 0, 70)
+                playerList.Position = UDim2.new(0, 10, 0, 65)
             else
                 playerList.Visible = false
             end
@@ -1724,7 +1633,7 @@ local function CreateGUI()
                         Tween(glow, {Color = CONFIG.COR_FUNDO_3, Transparency = 0.5}, 0.15)
                     end
                     for _, label in pairs(btn:GetChildren()) do
-                        if label:IsA("TextLabel") and label.Text ~= tab.Icon then
+                        if label:IsA("TextLabel") and label.Name ~= "TextLabel" then
                             label.TextColor3 = CONFIG.COR_TEXTO_SEC
                         end
                     end
@@ -1749,8 +1658,8 @@ local function CreateGUI()
     
     -- ABA PLAYER
     CreateSection("✈️ MOVIMENTO", tabFrames["Player"])
-    CreateToggle("✈️ Fly (WASD + Space/Shift)", ToggleFly, tabFrames["Player"])
-    CreateSlider("Velocidade Fly", 10, 300, SavedStates.FlySpeed, function(value)
+    CreateToggle("✈️ Voo", ToggleFly, tabFrames["Player"])
+    CreateSlider("Velocidade Voo", 10, 300, SavedStates.FlySpeed, function(value)
         SavedStates.FlySpeed = value
     end, tabFrames["Player"])
     
@@ -1759,11 +1668,11 @@ local function CreateGUI()
     CreateToggle("🏊 Andar na Água", ToggleSwim, tabFrames["Player"])
     
     CreateSection("⚡ VELOCIDADE", tabFrames["Player"])
-    CreateSlider("🏃 WalkSpeed", 16, 400, SavedStates.WalkSpeed, function(value)
+    CreateSlider("🏃 Velocidade", 16, 400, SavedStates.WalkSpeed, function(value)
         SavedStates.WalkSpeed = value
     end, tabFrames["Player"])
     
-    CreateSlider("⬆️ JumpPower", 50, 600, SavedStates.JumpPower, function(value)
+    CreateSlider("⬆️ Força do Pulo", 50, 600, SavedStates.JumpPower, function(value)
         SavedStates.JumpPower = value
     end, tabFrames["Player"])
     
@@ -1823,20 +1732,45 @@ local function CreateGUI()
         end
     end, tabFrames["Combat"])
     
-    CreateButton("🌪️ Fling (Arremessar)", FlingPlayer, tabFrames["Combat"])
+    CreateButton("🌪️ Arremessar", FlingPlayer, tabFrames["Combat"])
     
     CreateSection("👁️ OBSERVAÇÃO", tabFrames["Combat"])
-    CreateToggle("👁️ Espectatar Jogador", ToggleSpectatePlayer, tabFrames["Combat"])
-    CreateToggle("🚶 Seguir Jogador", ToggleFollowPlayer, tabFrames["Combat"])
-    CreateToggle("🌀 Orbitar Jogador", ToggleOrbitPlayer, tabFrames["Combat"])
+    CreateToggle("👁️ Espectatar", ToggleSpectatePlayer, tabFrames["Combat"])
+    CreateToggle("🚶 Seguir", ToggleFollowPlayer, tabFrames["Combat"])
+    CreateToggle("🌀 Orbitar", ToggleOrbitPlayer, tabFrames["Combat"])
     
     -- ABA TROLL
-    CreateSection("😈 TROLLAGEM AVANÇADA", tabFrames["Troll"])
-    CreateButton("👔 Copiar Roupa", CopyOutfit, tabFrames["Troll"])
-    CreateButton("💃 Dançar no Jogador", DanceOnPlayer, tabFrames["Troll"])
-    CreateButton("🍑 Rebolar no Jogador", TwerkOnPlayer, tabFrames["Troll"])
+    CreateSection("😈 TROLLAGEM", tabFrames["Troll"])
+    CreateButton("👔 Copiar Roupa", function()
+        if not SelectedPlayer or not SelectedPlayer.Parent then
+            Notify("⚠️ Selecione um jogador!", CONFIG.COR_ERRO)
+            return
+        end
+        
+        local char = LocalPlayer.Character
+        local targetChar = SelectedPlayer.Character
+        
+        if not char or not targetChar then
+            Notify("❌ Personagens não encontrados", CONFIG.COR_ERRO)
+            return
+        end
+        
+        for _, item in pairs(char:GetChildren()) do
+            if item:IsA("Accessory") or item:IsA("Shirt") or item:IsA("Pants") then
+                item:Destroy()
+            end
+        end
+        
+        for _, item in pairs(targetChar:GetChildren()) do
+            if item:IsA("Accessory") or item:IsA("Shirt") or item:IsA("Pants") then
+                local clone = item:Clone()
+                clone.Parent = char
+            end
+        end
+        
+        Notify("👔 Roupa copiada!", CONFIG.COR_SUCESSO)
+    end, tabFrames["Troll"])
     
-    CreateSection("🎪 EFEITOS", tabFrames["Troll"])
     CreateButton("🌀 Girar Jogador", function()
         if not SelectedPlayer or not SelectedPlayer.Parent then
             Notify("⚠️ Selecione um jogador!", CONFIG.COR_ERRO)
@@ -1858,63 +1792,14 @@ local function CreateGUI()
                     end
                 end)
                 
-                Notify("🌀 " .. SelectedPlayer.Name .. " girando!", CONFIG.COR_SUCESSO)
+                Notify("🌀 Girando!", CONFIG.COR_SUCESSO)
             end
-        end
-    end, tabFrames["Troll"])
-    
-    CreateButton("🔊 Spam Sons", function()
-        if not SelectedPlayer or not SelectedPlayer.Parent then
-            Notify("⚠️ Selecione um jogador!", CONFIG.COR_ERRO)
-            return
-        end
-        
-        local targetChar = SelectedPlayer.Character
-        if targetChar then
-            local sounds = {
-                "130768805", "130776150", "130777688", "130785805"
-            }
-            
-            for i = 1, 20 do
-                task.spawn(function()
-                    local sound = Instance.new("Sound")
-                    sound.SoundId = "rbxassetid://" .. sounds[math.random(1, #sounds)]
-                    sound.Volume = 5
-                    sound.Parent = targetChar.HumanoidRootPart or targetChar.Head
-                    sound:Play()
-                    task.wait(sound.TimeLength)
-                    sound:Destroy()
-                end)
-            end
-            
-            Notify("🔊 Sons spammados!", CONFIG.COR_SUCESSO)
-        end
-    end, tabFrames["Troll"])
-    
-    CreateButton("🔥 Benx Player", function()
-        if not SelectedPlayer or not SelectedPlayer.Parent then
-            Notify("⚠️ Selecione um jogador!", CONFIG.COR_ERRO)
-            return
-        end
-        
-        local targetChar = SelectedPlayer.Character
-        if targetChar then
-            for _, part in pairs(targetChar:GetChildren()) do
-                if part:IsA("BasePart") then
-                    local fire = Instance.new("Fire")
-                    fire.Size = 10
-                    fire.Heat = 15
-                    fire.Parent = part
-                end
-            end
-            
-            Notify("🔥 " .. SelectedPlayer.Name .. " em chamas!", CONFIG.COR_SUCESSO)
         end
     end, tabFrames["Troll"])
     
     -- ABA TELEPORT
     CreateSection("🚀 TELEPORTE", tabFrames["Teleport"])
-    CreateButton("🚀 Teleportar para Jogador", TeleportToPlayer, tabFrames["Teleport"])
+    CreateButton("🚀 Ir para Jogador", TeleportToPlayer, tabFrames["Teleport"])
     
     CreateButton("🏠 Spawn", function()
         local char = LocalPlayer.Character
@@ -1932,7 +1817,7 @@ local function CreateGUI()
         end
     end, tabFrames["Teleport"])
     
-    CreateSection("📌 POSIÇÕES SALVAS", tabFrames["Teleport"])
+    CreateSection("📌 POSIÇÕES", tabFrames["Teleport"])
     CreateButton("📌 Salvar Posição", function()
         local char = LocalPlayer.Character
         if char then
@@ -1944,7 +1829,7 @@ local function CreateGUI()
         end
     end, tabFrames["Teleport"])
     
-    CreateButton("📍 Voltar à Posição", function()
+    CreateButton("📍 Voltar", function()
         if not SavedStates.SavedPosition then
             Notify("⚠️ Nenhuma posição salva!", CONFIG.COR_ERRO)
             return
@@ -1960,11 +1845,11 @@ local function CreateGUI()
     end, tabFrames["Teleport"])
     
     -- ABA ESP
-    CreateSection("👁️ ESP GERAL", tabFrames["ESP"])
+    CreateSection("👁️ ESP", tabFrames["ESP"])
     CreateToggle("👁️ Ativar ESP", ToggleESP, tabFrames["ESP"])
     
-    CreateSection("📦 OPÇÕES DE ESP", tabFrames["ESP"])
-    CreateToggle("📦 Box ESP", function(state)
+    CreateSection("📦 OPÇÕES", tabFrames["ESP"])
+    CreateToggle("📦 Box", function(state)
         SavedStates.ESPBox = state
         if SavedStates.ESPEnabled then
             ToggleESP(false)
@@ -1973,7 +1858,7 @@ local function CreateGUI()
         end
     end, tabFrames["ESP"])
     
-    CreateToggle("📏 Tracers", function(state)
+    CreateToggle("📏 Linhas", function(state)
         SavedStates.ESPTracers = state
         if SavedStates.ESPEnabled then
             ToggleESP(false)
@@ -2000,7 +1885,7 @@ local function CreateGUI()
         end
     end, tabFrames["ESP"])
     
-    CreateToggle("❤️ Barra de Vida", function(state)
+    CreateToggle("❤️ Vida", function(state)
         SavedStates.ESPHealth = state
         if SavedStates.ESPEnabled then
             ToggleESP(false)
@@ -2009,17 +1894,8 @@ local function CreateGUI()
         end
     end, tabFrames["ESP"])
     
-    CreateToggle("✨ Chams (Highlight)", function(state)
+    CreateToggle("✨ Chams", function(state)
         SavedStates.ESPChams = state
-        if SavedStates.ESPEnabled then
-            ToggleESP(false)
-            task.wait(0.1)
-            ToggleESP(true)
-        end
-    end, tabFrames["ESP"])
-    
-    CreateToggle("🎨 Cor do Time", function(state)
-        SavedStates.ESPTeamColor = state
         if SavedStates.ESPEnabled then
             ToggleESP(false)
             task.wait(0.1)
@@ -2043,7 +1919,7 @@ local function CreateGUI()
     end, tabFrames["Visual"])
     
     CreateSection("⏰ TEMPO", tabFrames["Visual"])
-    CreateButton("☀️ Dia Permanente", function()
+    CreateButton("☀️ Dia", function()
         Lighting.ClockTime = 14
         if Connections.TimeFreeze then Connections.TimeFreeze:Disconnect() end
         Connections.TimeFreeze = RunService.Heartbeat:Connect(function()
@@ -2052,7 +1928,7 @@ local function CreateGUI()
         Notify("☀️ Dia permanente!", CONFIG.COR_SUCESSO)
     end, tabFrames["Visual"])
     
-    CreateButton("🌙 Noite Permanente", function()
+    CreateButton("🌙 Noite", function()
         Lighting.ClockTime = 0
         if Connections.TimeFreeze then Connections.TimeFreeze:Disconnect() end
         Connections.TimeFreeze = RunService.Heartbeat:Connect(function()
@@ -2061,19 +1937,8 @@ local function CreateGUI()
         Notify("🌙 Noite permanente!", CONFIG.COR_SUCESSO)
     end, tabFrames["Visual"])
     
-    CreateSection("⚡ PERFORMANCE", tabFrames["Visual"])
-    CreateButton("⚡ Otimizar FPS", function()
-        settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
-        for _, obj in ipairs(workspace:GetDescendants()) do
-            if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
-                obj.Enabled = false
-            end
-        end
-        Notify("⚡ FPS otimizado!", CONFIG.COR_SUCESSO)
-    end, tabFrames["Visual"])
-    
     -- ABA CONFIG
-    CreateSection("🎨 PERSONALIZAÇÃO", tabFrames["Config"])
+    CreateSection("🎨 COR DO MENU", tabFrames["Config"])
     CreateToggle("🌈 Modo Rainbow", function(state)
         SavedStates.RainbowMode = state
         
@@ -2089,33 +1954,36 @@ local function CreateGUI()
             end)
             Notify("🌈 Modo Rainbow ativado!", CONFIG.COR_SUCESSO)
         else
-            SavedStates.CustomColor = nil
+            SavedStates.CustomColor = Color3.fromRGB(SavedStates.ColorR, SavedStates.ColorG, SavedStates.ColorB)
             UpdateAllColors()
-            Notify("🌈 Modo desativado", CONFIG.COR_ERRO)
+            Notify("🎨 Rainbow desativado", CONFIG.COR_ERRO)
         end
     end, tabFrames["Config"])
     
-    CreateSection("🎨 CORES PREDEFINIDAS", tabFrames["Config"])
-    local presetColors = {
-        {Name = "🟣 Roxo", Color = Color3.fromRGB(139, 0, 255)},
-        {Name = "🔴 Vermelho", Color = Color3.fromRGB(255, 50, 80)},
-        {Name = "🔵 Azul", Color = Color3.fromRGB(50, 150, 255)},
-        {Name = "🟢 Verde", Color = Color3.fromRGB(0, 255, 100)},
-        {Name = "🟡 Amarelo", Color = Color3.fromRGB(255, 220, 0)},
-        {Name = "💗 Rosa", Color = Color3.fromRGB(255, 100, 200)},
-    }
-    
-    for _, preset in ipairs(presetColors) do
-        CreateButton(preset.Name, function()
-            if SavedStates.RainbowMode then
-                Notify("⚠️ Desative o Rainbow!", CONFIG.COR_ERRO)
-                return
-            end
-            SavedStates.CustomColor = preset.Color
+    CreateSection("🎨 COR PERSONALIZADA (RGB)", tabFrames["Config"])
+    CreateSlider("🔴 Vermelho (R)", 0, 255, SavedStates.ColorR, function(value)
+        SavedStates.ColorR = value
+        if not SavedStates.RainbowMode then
+            SavedStates.CustomColor = Color3.fromRGB(SavedStates.ColorR, SavedStates.ColorG, SavedStates.ColorB)
             UpdateAllColors()
-            Notify("🎨 Cor alterada!", CONFIG.COR_SUCESSO)
-        end, tabFrames["Config"])
-    end
+        end
+    end, tabFrames["Config"])
+    
+    CreateSlider("🟢 Verde (G)", 0, 255, SavedStates.ColorG, function(value)
+        SavedStates.ColorG = value
+        if not SavedStates.RainbowMode then
+            SavedStates.CustomColor = Color3.fromRGB(SavedStates.ColorR, SavedStates.ColorG, SavedStates.ColorB)
+            UpdateAllColors()
+        end
+    end, tabFrames["Config"])
+    
+    CreateSlider("🔵 Azul (B)", 0, 255, SavedStates.ColorB, function(value)
+        SavedStates.ColorB = value
+        if not SavedStates.RainbowMode then
+            SavedStates.CustomColor = Color3.fromRGB(SavedStates.ColorR, SavedStates.ColorG, SavedStates.ColorB)
+            UpdateAllColors()
+        end
+    end, tabFrames["Config"])
     
     CreateSection("ℹ️ INFORMAÇÕES", tabFrames["Config"])
     CreateButton("📊 Estatísticas", function()
@@ -2123,13 +1991,11 @@ local function CreateGUI()
 ━━━━━━━━━━━━━━━━━
 📊 FPS: %d
 👥 Jogadores: %d
-⚡ Ping: %d ms
-🎮 Jogo: %s]],
+⚡ Ping: %d ms]],
             CONFIG.VERSAO,
             math.floor(workspace:GetRealPhysicsFPS()),
             #Players:GetPlayers(),
-            math.floor(LocalPlayer:GetNetworkPing() * 1000),
-            game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name or "Unknown"
+            math.floor(LocalPlayer:GetNetworkPing() * 1000)
         )
         Notify(info, GetCurrentColor())
     end, tabFrames["Config"])
@@ -2161,20 +2027,64 @@ local function CreateGUI()
             FOV = 70,
             RainbowMode = false,
             CustomColor = nil,
-            MenuScale = 1
+            ColorR = 139,
+            ColorG = 0,
+            ColorB = 255
         }
-        Notify("🔄 Configurações resetadas!\nReabra (F)", CONFIG.COR_SUCESSO)
+        Notify("🔄 Resetado! Reabra (F)", CONFIG.COR_SUCESSO)
     end, tabFrames["Config"])
     
-    -- Animação de entrada (GTA Style - slide from right)
-    main.Position = UDim2.new(1, 50, 0.5, -(baseHeight * scale)/2)
-    Tween(main, {Position = UDim2.new(1, -((baseWidth * scale) + 20), 0.5, -(baseHeight * scale)/2)}, 0.4)
+    CreateSection("👤 CRÉDITOS", tabFrames["Config"])
+    local creditsFrame = Instance.new("Frame")
+    creditsFrame.Size = UDim2.new(1, -10, 0, 70)
+    creditsFrame.BackgroundColor3 = CONFIG.COR_FUNDO_2
+    creditsFrame.BackgroundTransparency = 0.3
+    creditsFrame.BorderSizePixel = 0
+    creditsFrame.Parent = tabFrames["Config"]
+    
+    Instance.new("UICorner", creditsFrame).CornerRadius = UDim.new(0, 8)
+    
+    local creditTitle = Instance.new("TextLabel")
+    creditTitle.Size = UDim2.new(1, 0, 0, 22)
+    creditTitle.Position = UDim2.new(0, 0, 0, 8)
+    creditTitle.BackgroundTransparency = 1
+    creditTitle.Text = "👑 DESENVOLVEDOR"
+    creditTitle.TextColor3 = GetCurrentColor()
+    creditTitle.TextSize = 12
+    creditTitle.Font = Enum.Font.GothamBold
+    creditTitle.Parent = creditsFrame
+    creditTitle:SetAttribute("TextColorUpdate", true)
+    table.insert(UIElements, creditTitle)
+    
+    local creditName = Instance.new("TextLabel")
+    creditName.Size = UDim2.new(1, 0, 0, 20)
+    creditName.Position = UDim2.new(0, 0, 0, 30)
+    creditName.BackgroundTransparency = 1
+    creditName.Text = "2M"
+    creditName.TextColor3 = CONFIG.COR_TEXTO
+    creditName.TextSize = 18
+    creditName.Font = Enum.Font.GothamBold
+    creditName.Parent = creditsFrame
+    
+    local creditDesc = Instance.new("TextLabel")
+    creditDesc.Size = UDim2.new(1, 0, 0, 16)
+    creditDesc.Position = UDim2.new(0, 0, 0, 50)
+    creditDesc.BackgroundTransparency = 1
+    creditDesc.Text = "Dono & Desenvolvedor"
+    creditDesc.TextColor3 = CONFIG.COR_TEXTO_SEC
+    creditDesc.TextSize = 10
+    creditDesc.Font = Enum.Font.Gotham
+    creditDesc.Parent = creditsFrame
+    
+    -- Animação de entrada
+    main.Position = UDim2.new(0.5, -200, 1, 50)
+    Tween(main, {Position = UDim2.new(0.5, -200, 0.5, -290)}, 0.4)
     
     -- Criar botão flutuante
     CreateFloatingButton()
     
-    Log("Menu GTA RP carregado!")
-    Notify("🟣 SHAKA Hub " .. CONFIG.VERSAO .. " carregado!\nToque no botão flutuante ou pressione F", GetCurrentColor())
+    Log("Menu BETA carregado!")
+    Notify("🟣 SHAKA Hub " .. CONFIG.VERSAO .. "\nPressione F ou toque no botão", GetCurrentColor())
 end
 
 -- ════════════════════════════════════════════════════════════
@@ -2208,8 +2118,8 @@ end
 -- INICIALIZAÇÃO
 -- ════════════════════════════════════════════════════════════
 Log("════════════════════════════════════════")
-Log("  🟣 SHAKA Hub GTA RP " .. CONFIG.VERSAO)
-Log("  🎮 Edition Premium")
+Log("  🟣 SHAKA Hub " .. CONFIG.VERSAO)
+Log("  👑 Desenvolvido por 2M")
 Log("════════════════════════════════════════")
 
 task.wait(0.3)
@@ -2230,7 +2140,7 @@ UserInputService.InputBegan:Connect(function(input, gpe)
             
             if main then
                 if main.Visible then
-                    Tween(main, {Position = UDim2.new(1, 50, 0.5, -290)}, 0.3)
+                    Tween(main, {Position = UDim2.new(0.5, -200, 1, 50)}, 0.3)
                     task.wait(0.3)
                     main.Visible = false
                     if floatingBtn then
@@ -2239,10 +2149,10 @@ UserInputService.InputBegan:Connect(function(input, gpe)
                     Log("Menu fechado")
                 else
                     main.Visible = true
-                    main.Position = UDim2.new(1, 50, 0.5, -290)
-                    Tween(main, {Position = UDim2.new(1, -440, 0.5, -290)}, 0.3)
+                    main.Position = UDim2.new(0.5, -200, 1, 50)
+                    Tween(main, {Position = UDim2.new(0.5, -200, 0.5, -290)}, 0.3)
                     if floatingBtn then
-                        floatingBtn.Visible = true
+                        floatingBtn.Visible = false
                     end
                     Log("Menu aberto")
                 end
@@ -2295,11 +2205,10 @@ Players.PlayerRemoving:Connect(function(player)
     end
 end)
 
-Log("✅ SHAKA Hub carregado com sucesso!")
+Log("✅ SHAKA Hub BETA carregado com sucesso!")
 Log("⌨️  Pressione F para abrir/fechar")
-Log("🎨 Layout GTA RP implementado")
-Log("😈 Novas funções: Dançar, Rebolar, Orbitar")
-Log("👁️ ESP otimizado com Chams")
-Log("🚶 Sistema de Follow e Spectate")
-Log("🏊 Andar na água e muito mais!")
+Log("📱 Botão flutuante minimalista")
+Log("📊 Lista de jogadores por distância")
+Log("🎨 Sistema RGB personalizado")
+Log("👑 Desenvolvido por 2M")
 Log("════════════════════════════════════════")
