@@ -89,12 +89,12 @@ local function GetCurrentColor()
 end
 
 local function UpdateAllColors()
-    if not GUI then return end
+    if not GUI or not GUI.Parent then return end
     local currentColor = GetCurrentColor()
     
     for _, element in pairs(UIElements) do
-        if element and element.Parent then
-            pcall(function()
+        pcall(function()
+            if element and element.Parent then
                 if element:GetAttribute("ColorUpdate") then
                     TweenService:Create(element, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
                         BackgroundColor3 = currentColor
@@ -110,8 +110,8 @@ local function UpdateAllColors()
                         TextColor3 = currentColor
                     }):Play()
                 end
-            end)
-        end
+            end
+        end)
     end
 end
 
@@ -2580,4 +2580,23 @@ Players.PlayerAdded:Connect(function(player)
         task.wait(1)
         CreateESP(player)
     end
-en
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    if ESPObjects[player] then
+        local esp = ESPObjects[player]
+        pcall(function()
+            if esp.Box then esp.Box:Remove() end
+            if esp.Tracer then esp.Tracer:Remove() end
+            if esp.Name then esp.Name:Remove() end
+            if esp.Distance then esp.Distance:Remove() end
+            if esp.Health then esp.Health:Remove() end
+            if esp.HealthBG then esp.HealthBG:Remove() end
+        end)
+        ESPObjects[player] = nil
+    end
+    
+    if SelectedPlayer == player then
+        SelectedPlayer = nil
+    end
+end)
