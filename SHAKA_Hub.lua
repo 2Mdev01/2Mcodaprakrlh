@@ -942,7 +942,9 @@ end
 -- BOTÃO FLUTUANTE ULTRA ESTILIZADO
 -- ══════════════════════════════════════════════════════════
 local function CreateFloatingButton()
-    if not GUI then return end
+    if not GUI or not GUI.Parent then return end
+    
+    local currentColor = GetCurrentColor()
     
     local floatingBtn = Instance.new("ImageButton")
     floatingBtn.Name = "FloatingButton"
@@ -959,7 +961,7 @@ local function CreateFloatingButton()
     corner.CornerRadius = UDim.new(0, 35)
     
     local glow = Instance.new("UIStroke", floatingBtn)
-    glow.Color = GetCurrentColor()
+    glow.Color = currentColor
     glow.Thickness = 3
     glow.Transparency = 0
     glow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
@@ -968,7 +970,7 @@ local function CreateFloatingButton()
     
     local gradient = Instance.new("UIGradient", floatingBtn)
     gradient.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, GetCurrentColor()),
+        ColorSequenceKeypoint.new(0, currentColor),
         ColorSequenceKeypoint.new(1, CONFIG.COR_FUNDO)
     })
     gradient.Rotation = 45
@@ -981,6 +983,23 @@ local function CreateFloatingButton()
     logo.TextSize = 40
     logo.Font = Enum.Font.GothamBold
     logo.Parent = floatingBtn
+    
+    -- Animação de pulso
+    task.spawn(function()
+        while floatingBtn and floatingBtn.Parent and GUI and GUI.Parent do
+            pcall(function()
+                Tween(floatingBtn, {Size = UDim2.new(0, 75, 0, 75)}, 0.8, Enum.EasingStyle.Sine)
+                Tween(glow, {Thickness = 5}, 0.8, Enum.EasingStyle.Sine)
+            end)
+            task.wait(0.8)
+            if not floatingBtn or not floatingBtn.Parent then break end
+            pcall(function()
+                Tween(floatingBtn, {Size = UDim2.new(0, 70, 0, 70)}, 0.8, Enum.EasingStyle.Sine)
+                Tween(glow, {Thickness = 3}, 0.8, Enum.EasingStyle.Sine)
+            end)
+            task.wait(0.8)
+        end
+    end)
     
     -- Animação de pulso
     task.spawn(function()
@@ -1043,9 +1062,11 @@ local function CreateFloatingButton()
                 main.Visible = true
                 main.Position = UDim2.new(0.5, -300, 1.5, 0)
                 Tween(main, {Position = UDim2.new(0.5, -300, 0.5, -250)}, 0.5, Enum.EasingStyle.Back)
-                Tween(floatingBtn, {BackgroundTransparency = 1}, 0.3)
-                Tween(glow, {Transparency = 1}, 0.3)
-                Tween(logo, {TextTransparency = 1}, 0.3)
+                pcall(function()
+                    Tween(floatingBtn, {BackgroundTransparency = 1}, 0.3)
+                    if glow then Tween(glow, {Transparency = 1}, 0.3) end
+                    if logo then Tween(logo, {TextTransparency = 1}, 0.3) end
+                end)
                 task.wait(0.3)
                 floatingBtn.Visible = false
             end
@@ -2541,9 +2562,13 @@ UserInputService.InputBegan:Connect(function(input, gpe)
                     Tween(mainWindow, {Position = UDim2.new(0.5, -300, 0.5, -250)}, 0.5, Enum.EasingStyle.Back)
                     
                     if floatingBtn then
-                        Tween(floatingBtn, {BackgroundTransparency = 1}, 0.3)
-                        Tween(floatingBtn:FindFirstChildOfClass("UIStroke"), {Transparency = 1}, 0.3)
-                        Tween(floatingBtn:FindFirstChildOfClass("TextLabel"), {TextTransparency = 1}, 0.3)
+                        pcall(function()
+                            Tween(floatingBtn, {BackgroundTransparency = 1}, 0.3)
+                            local btnGlow = floatingBtn:FindFirstChildOfClass("UIStroke")
+                            local btnText = floatingBtn:FindFirstChildOfClass("TextLabel")
+                            if btnGlow then Tween(btnGlow, {Transparency = 1}, 0.3) end
+                            if btnText then Tween(btnText, {TextTransparency = 1}, 0.3) end
+                        end)
                         task.wait(0.3)
                         floatingBtn.Visible = false
                     end
@@ -2555,8 +2580,12 @@ UserInputService.InputBegan:Connect(function(input, gpe)
                     if floatingBtn then
                         floatingBtn.Visible = true
                         floatingBtn.BackgroundTransparency = 0
-                        Tween(floatingBtn:FindFirstChildOfClass("UIStroke"), {Transparency = 0}, 0.3)
-                        Tween(floatingBtn:FindFirstChildOfClass("TextLabel"), {TextTransparency = 0}, 0.3)
+                        pcall(function()
+                            local btnGlow = floatingBtn:FindFirstChildOfClass("UIStroke")
+                            local btnText = floatingBtn:FindFirstChildOfClass("TextLabel")
+                            if btnGlow then Tween(btnGlow, {Transparency = 0}, 0.3) end
+                            if btnText then Tween(btnText, {TextTransparency = 0}, 0.3) end
+                        end)
                     end
                 end
             end
