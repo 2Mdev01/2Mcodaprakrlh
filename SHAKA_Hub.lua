@@ -45,11 +45,15 @@ local SavedStates = {
     GodMode = false,
     InvisibleEnabled = false,
     Swim = false,
+    NoFall = false,
+    AutoSprint = false,
     
     -- Combat/Troll
     FollowPlayer = false,
     SpectatePlayer = false,
     OrbitPlayer = false,
+    AnnoyPlayer = false,
+    MirrorPlayer = false,
     
     -- ESP
     ESPEnabled = false,
