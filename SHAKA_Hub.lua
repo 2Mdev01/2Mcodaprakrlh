@@ -189,7 +189,6 @@ end
 -- FUNÇÕES DE MOVIMENTO DO PLAYER
 -- ══════════════════════════════════════════════════════════
 
--- Substitua sua função ToggleFly por esta (mesma assinatura)
 local function ToggleFly(state)
 	SavedStates.FlyEnabled = state
 
@@ -203,13 +202,13 @@ local function ToggleFly(state)
 	if state then
 		SavedStates.FlySpeed = SavedStates.FlySpeed or 50
 
-		-- invisível
+		-- Invisibilidade
 		for _, v in pairs(char:GetDescendants()) do
 			if v:IsA("BasePart") then v.Transparency = 1 end
 			if v:IsA("Decal") or v:IsA("Texture") then v.Transparency = 1 end
 		end
 
-		-- garantir física livre
+		-- Preparar física livre
 		humanoid:ChangeState(Enum.HumanoidStateType.Physics)
 		humanoid.PlatformStand = true
 		humanoid.AutoRotate = false
@@ -226,60 +225,71 @@ local function ToggleFly(state)
 		bv.Velocity = Vector3.zero
 		bv.Parent = root
 
-		-- noclip
+		-- Noclip
 		Connections.Noclip = RunService.Stepped:Connect(function()
 			for _, v in pairs(char:GetDescendants()) do
 				if v:IsA("BasePart") then v.CanCollide = false end
 			end
 		end)
 
-		-- loop do voo
+		-- Loop de voo
 		Connections.Fly = RunService.RenderStepped:Connect(function()
 			if not SavedStates.FlyEnabled then return end
 
 			local move = Vector3.zero
 			local speed = SavedStates.FlySpeed
+			local cam = workspace.CurrentCamera
 
-			-- PC - WASD
+			-- Controles PC
 			if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-				move = move + Camera.CFrame.LookVector
+				move = move + cam.CFrame.LookVector
 			end
 			if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-				move = move - Camera.CFrame.LookVector
+				move = move - cam.CFrame.LookVector
 			end
 			if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-				move = move - Camera.CFrame.RightVector
+				move = move - cam.CFrame.RightVector
 			end
 			if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-				move = move + Camera.CFrame.RightVector
+				move = move + cam.CFrame.RightVector
 			end
 			if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-				move = move + Vector3.new(0,1,0)
+				move = move + Vector3.new(0, 1, 0)
 			end
 			if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-				move = move - Vector3.new(0,1,0)
+				move = move - Vector3.new(0, 1, 0)
 			end
 
-			-- MOBILE - analógico
-			local mv = LocalPlayer:GetMoveVector()
-			if mv.Magnitude > 0 then
-				move = move + ((Camera.CFrame.LookVector * mv.Z) + (Camera.CFrame.RightVector * mv.X))
+			-- MOBILE (somente se houver função GetMoveVector disponível)
+			local mv = nil
+			if typeof(LocalPlayer:GetMouse) ~= "function" then -- fail-safe
+				pcall(function()
+					if LocalPlayer.GetMoveVector then
+						mv = LocalPlayer:GetMoveVector()
+					end
+				end)
+			else
+				pcall(function()
+					mv = LocalPlayer:GetMoveVector()
+				end)
 			end
 
-			-- normalizar direção
+			if mv and typeof(mv) == "Vector3" and mv.Magnitude > 0 then
+				move = move + ((cam.CFrame.LookVector * mv.Z) + (cam.CFrame.RightVector * mv.X))
+			end
+
+			-- Aplicar movimento
 			if move.Magnitude > 0 then
 				move = move.Unit * speed
 			end
 
-			-- aplicar
 			bv.Velocity = move
-			bg.CFrame = CFrame.new(root.Position, root.Position + Camera.CFrame.LookVector)
+			bg.CFrame = CFrame.new(root.Position, root.Position + cam.CFrame.LookVector)
 		end)
 
 		Notify("Voo ativado! Use WASD ou analógico + espaço", CONFIG.COR_SUCESSO, "✈️")
 
 	else
-		-- desligar
 		if Connections.Fly then Connections.Fly:Disconnect() Connections.Fly = nil end
 		if Connections.Noclip then Connections.Noclip:Disconnect() Connections.Noclip = nil end
 
@@ -301,13 +311,6 @@ local function ToggleFly(state)
 	end
 end
 
--- 🔘 Atalho pra testar com tecla "E"
-UserInputService.InputBegan:Connect(function(input, gpe)
-	if gpe then return end
-	if input.KeyCode == Enum.KeyCode.E then
-		ToggleFly(not SavedStates.FlyEnabled)
-	end
-end)
 
 
 
