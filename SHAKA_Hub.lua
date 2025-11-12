@@ -190,10 +190,11 @@ end
 -- ══════════════════════════════════════════════════════════
 
 -- Sistema de voo melhorado + Noclip + Invisibilidade (PC/Mobile)
+-- Sistema de voo melhorado + Noclip + Invisibilidade (corrigido para PC e Mobile)
 local function ToggleFly(state)
     SavedStates.FlyEnabled = state
-    
-    -- Desconectar conexão anterior se existir
+
+    -- Desconectar conexões antigas
     if Connections.Fly then
         Connections.Fly:Disconnect()
         Connections.Fly = nil
@@ -202,7 +203,7 @@ local function ToggleFly(state)
         Connections.Noclip:Disconnect()
         Connections.Noclip = nil
     end
-    
+
     local char = LocalPlayer.Character
     if not char then return end
     local root = char:FindFirstChild("HumanoidRootPart")
@@ -210,7 +211,7 @@ local function ToggleFly(state)
     local humanoid = char:FindFirstChildOfClass("Humanoid")
 
     if state then
-        -- Deixar invisível
+        -- Invisível + noclip
         for _, v in pairs(char:GetDescendants()) do
             if v:IsA("BasePart") then
                 v.Transparency = 1
@@ -219,89 +220,92 @@ local function ToggleFly(state)
                 v.Transparency = 1
             end
         end
-        
-        -- Criar objetos de física para o voo
+
+        -- Objetos de física
         local bg = Instance.new("BodyGyro")
         bg.Name = "FlyGyro"
-        bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+        bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
         bg.P = 9e4
         bg.Parent = root
-        
+
         local bv = Instance.new("BodyVelocity")
         bv.Name = "FlyVel"
-        bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+        bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
         bv.Velocity = Vector3.zero
         bv.Parent = root
-        
-        -- Noclip ativo durante o voo
+
+        -- Noclip ativo
         Connections.Noclip = RunService.Stepped:Connect(function()
             pcall(function()
-                for _, part in pairs(char:GetDescendants()) do
-                    if part:IsA("BasePart") then
-                        part.CanCollide = false
+                for _, p in pairs(char:GetDescendants()) do
+                    if p:IsA("BasePart") then
+                        p.CanCollide = false
                     end
                 end
             end)
         end)
 
         -- Loop principal do voo
-        Connections.Fly = RunService.Heartbeat:Connect(function()
+        Connections.Fly = RunService.Heartbeat:Connect(function(dt)
             if not char or not char.Parent or not root or not root.Parent then
                 ToggleFly(false)
                 return
             end
-            
-            local speed = SavedStates.FlySpeed or 3
-            local move = Vector3.zero
-            
-            -- Controles PC (WASD + Space/Shift)
-            if UserInputService:IsKeyDown(Enum.KeyCode.W) then 
-                move += Camera.CFrame.LookVector * speed 
+
+            local speed = SavedStates.FlySpeed or 50
+            local moveDir = Vector3.zero
+
+            -- Controles PC
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                moveDir += Camera.CFrame.LookVector
             end
-            if UserInputService:IsKeyDown(Enum.KeyCode.S) then 
-                move -= Camera.CFrame.LookVector * speed 
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                moveDir -= Camera.CFrame.LookVector
             end
-            if UserInputService:IsKeyDown(Enum.KeyCode.A) then 
-                move -= Camera.CFrame.RightVector * speed 
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                moveDir -= Camera.CFrame.RightVector
             end
-            if UserInputService:IsKeyDown(Enum.KeyCode.D) then 
-                move += Camera.CFrame.RightVector * speed 
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                moveDir += Camera.CFrame.RightVector
             end
-            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then 
-                move += Vector3.new(0, speed, 0) 
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                moveDir += Vector3.yAxis
             end
-            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then 
-                move -= Vector3.new(0, speed, 0) 
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                moveDir -= Vector3.yAxis
             end
-            
-            -- Controles Mobile (Thumbstick + Botão de Pulo)
+
+            -- Mobile (analógico + pulo)
             local moveVector = LocalPlayer:GetMoveVector()
             if moveVector.Magnitude > 0 then
-                local cameraCFrame = Camera.CFrame
-                move += ((cameraCFrame.LookVector * moveVector.Z) + (cameraCFrame.RightVector * moveVector.X)) * speed
+                local cam = Camera.CFrame
+                moveDir += (cam.LookVector * moveVector.Z + cam.RightVector * moveVector.X)
             end
-            
-            -- Detectar pulo no mobile
             if humanoid and humanoid:GetState() == Enum.HumanoidStateType.Jumping then
-                move += Vector3.new(0, speed, 0)
+                moveDir += Vector3.yAxis
             end
-            
-            -- Aplicar movimento
-            if bv and bv.Parent then bv.Velocity = move end
-            if bg and bg.Parent then bg.CFrame = Camera.CFrame end
+
+            -- Normalizar e aplicar velocidade
+            if moveDir.Magnitude > 0 then
+                moveDir = moveDir.Unit * speed
+            end
+
+            bv.Velocity = moveDir
+            bg.CFrame = Camera.CFrame
         end)
-        
-        Notify("Voo + Noclip ativado! Use WASD/Analógico + Pular", CONFIG.COR_SUCESSO, "✈️")
+
+        Notify("Voo + Noclip ativado!", CONFIG.COR_SUCESSO, "✈️")
     else
-        -- Remover objetos de física
+        -- Desligar voo
         if root then
-            local gyro = root:FindFirstChild("FlyGyro")
-            local vel = root:FindFirstChild("FlyVel")
-            if gyro then gyro:Destroy() end
-            if vel then vel:Destroy() end
+            for _, v in ipairs(root:GetChildren()) do
+                if v:IsA("BodyGyro") or v:IsA("BodyVelocity") then
+                    v:Destroy()
+                end
+            end
         end
 
-        -- Reaparecer e restaurar colisões
+        -- Voltar a aparecer
         for _, v in pairs(char:GetDescendants()) do
             if v:IsA("BasePart") then
                 v.Transparency = 0
@@ -314,6 +318,7 @@ local function ToggleFly(state)
         Notify("Voo + Noclip desativado", CONFIG.COR_ERRO, "✈️")
     end
 end
+
 
 
 
