@@ -234,58 +234,53 @@ local function ToggleFly(state)
 
 		-- Loop de voo
 		Connections.Fly = RunService.RenderStepped:Connect(function()
-			if not SavedStates.FlyEnabled then return end
+	if not SavedStates.FlyEnabled then return end
+	if not char or not root or not root.Parent then return end
 
-			local move = Vector3.zero
-			local speed = SavedStates.FlySpeed
-			local cam = workspace.CurrentCamera
+	local move = Vector3.zero
+	local speed = SavedStates.FlySpeed
+	local cam = workspace.CurrentCamera
 
-			-- Controles PC
-			if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-				move = move + cam.CFrame.LookVector
-			end
-			if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-				move = move - cam.CFrame.LookVector
-			end
-			if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-				move = move - cam.CFrame.RightVector
-			end
-			if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-				move = move + cam.CFrame.RightVector
-			end
-			if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-				move = move + Vector3.new(0, 1, 0)
-			end
-			if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-				move = move - Vector3.new(0, 1, 0)
-			end
+	-- Controles PC (WASD + Espaço + Shift)
+	if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+		move = move + cam.CFrame.LookVector
+	end
+	if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+		move = move - cam.CFrame.LookVector
+	end
+	if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+		move = move - cam.CFrame.RightVector
+	end
+	if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+		move = move + cam.CFrame.RightVector
+	end
+	if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+		move = move + Vector3.new(0, 1, 0)
+	end
+	if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+		move = move - Vector3.new(0, 1, 0)
+	end
 
-			-- MOBILE (somente se houver função GetMoveVector disponível)
-			local mv = nil
-			if typeof(LocalPlayer:GetMouse) ~= "function" then -- fail-safe
-				pcall(function()
-					if LocalPlayer.GetMoveVector then
-						mv = LocalPlayer:GetMoveVector()
-					end
-				end)
-			else
-				pcall(function()
-					mv = LocalPlayer:GetMoveVector()
-				end)
-			end
+	-- Controles Mobile (somente se suportado)
+	local moveVector = nil
+	pcall(function()
+		if typeof(LocalPlayer.GetMoveVector) == "function" then
+			moveVector = LocalPlayer:GetMoveVector()
+		end
+	end)
 
-			if mv and typeof(mv) == "Vector3" and mv.Magnitude > 0 then
-				move = move + ((cam.CFrame.LookVector * mv.Z) + (cam.CFrame.RightVector * mv.X))
-			end
+	if moveVector and typeof(moveVector) == "Vector3" and moveVector.Magnitude > 0 then
+		move = move + ((cam.CFrame.LookVector * moveVector.Z) + (cam.CFrame.RightVector * moveVector.X))
+	end
 
-			-- Aplicar movimento
-			if move.Magnitude > 0 then
-				move = move.Unit * speed
-			end
+	-- Aplicar movimento
+	if move.Magnitude > 0 then
+		move = move.Unit * speed
+	end
+	bv.Velocity = move
+	bg.CFrame = CFrame.new(root.Position, root.Position + cam.CFrame.LookVector)
+end)
 
-			bv.Velocity = move
-			bg.CFrame = CFrame.new(root.Position, root.Position + cam.CFrame.LookVector)
-		end)
 
 		Notify("Voo ativado! Use WASD ou analógico + espaço", CONFIG.COR_SUCESSO, "✈️")
 
