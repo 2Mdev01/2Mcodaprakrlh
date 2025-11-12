@@ -2019,26 +2019,58 @@ local function CreateGUI()
     end, tabFrames["Troll"], "👔")
     
     CreateButton("Seguir Jogador", function()
-        if not SelectedPlayer or not SelectedPlayer.Parent then
-            Notify("Selecione um jogador!", CONFIG.COR_ERRO, "⚠️")
-            return
-        end
+    if not SelectedPlayer or not SelectedPlayer.Parent then
+        Notify("Selecione um jogador!", CONFIG.COR_ERRO, "⚠️")
+        return
+    end
+
+    if Connections.Follow then
+        Connections.Follow:Disconnect()
+        Connections.Follow = nil
         
-        if Connections.Follow then
-            Connections.Follow:Disconnect()
-            Connections.Follow = nil
-            Notify("Parou de seguir", CONFIG.COR_ERRO, "🚶")
-        else
-            Connections.Follow = RunService.Heartbeat:Connect(function()
-                pcall(function()
-                    local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-                    local target = SelectedPlayer.Character.HumanoidRootPart
-                    hum:MoveTo(target.Position)
-                end)
-            end)
-            Notify("Seguindo " .. SelectedPlayer.Name, CONFIG.COR_SUCESSO, "🚶")
+        -- Parar animação de dança (se estiver tocando)
+        if DanceTrack then
+            DanceTrack:Stop()
+            DanceTrack = nil
         end
-    end, tabFrames["Troll"], "🚶")
+
+        Notify("Parou de grudar", CONFIG.COR_ERRO, "🚶")
+    else
+        local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        local animator = humanoid and humanoid:FindFirstChildOfClass("Animator")
+
+        -- Tocar animação de dança
+        if animator then
+            local animation = Instance.new("Animation")
+            animation.AnimationId = "rbxassetid://3189773368" -- 💃 Exemplo: "Dançar"
+            DanceTrack = animator:LoadAnimation(animation)
+            DanceTrack:Play()
+            DanceTrack.Looped = true
+        end
+
+        -- "Grudar" nas costas do jogador alvo
+        Connections.Follow = RunService.Heartbeat:Connect(function()
+            pcall(function()
+                local myChar = LocalPlayer.Character
+                local targetChar = SelectedPlayer.Character
+                if not myChar or not targetChar then return end
+
+                local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+                local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+                if not myRoot or not targetRoot then return end
+
+                -- Calcula posição logo atrás do jogador alvo
+                local offset = Vector3.new(0, 0, 2) -- distância das costas
+                local behindPos = targetRoot.CFrame * CFrame.new(offset)
+
+                -- Teleporta ou “cola” o personagem atrás
+                myRoot.CFrame = CFrame.new(behindPos.Position, targetRoot.Position)
+            end)
+        end)
+
+        Notify("Grudado em " .. SelectedPlayer.Name, CONFIG.COR_SUCESSO, "💃")
+    end
+end, tabFrames["Troll"], "🚶")
     
     -- ══════════ ABA AIMBOT ══════════
     CreateSection("AIMBOT PRINCIPAL", tabFrames["Aimbot"])
