@@ -1708,23 +1708,27 @@ local function CreateGUI()
         tabStroke.Transparency = 0.5
         tabStroke.Parent = tabBtn
         
-        -- Container para o ícone (imagem pequena)
+        -- Container para o ícone (logo da web)
         local iconContainer = Instance.new("Frame")
         iconContainer.Size = UDim2.new(0, 28, 0, 28)
         iconContainer.Position = UDim2.new(0, 10, 0.5, -14)
         iconContainer.BackgroundTransparency = 1
         iconContainer.Parent = tabBtn
         
-        -- Ícone (ImageLabel com fallback para emoji)
+        -- Ícone (ImageLabel com logo da web)
         local tabIcon = Instance.new("ImageLabel")
         tabIcon.Size = UDim2.new(1, 0, 1, 0)
         tabIcon.BackgroundTransparency = 1
         tabIcon.Image = tab.Icon
-        tabIcon.ImageColor3 = CONFIG.COR_TEXTO_SEC
         tabIcon.ScaleType = Enum.ScaleType.Fit
         tabIcon.Parent = iconContainer
         
-        -- Fallback: emoji se imagem não carregar
+        -- Aplicar cor ao ícone (para ficar com a cor do tema)
+        local iconColor = Instance.new("UIGradient")
+        iconColor.Color = ColorSequence.new(CONFIG.COR_TEXTO_SEC)
+        iconColor.Parent = tabIcon
+        
+        -- Fallback: emoji se logo não carregar
         local emojiLabel = Instance.new("TextLabel")
         emojiLabel.Size = UDim2.new(1, 0, 1, 0)
         emojiLabel.BackgroundTransparency = 1
@@ -1735,9 +1739,10 @@ local function CreateGUI()
         emojiLabel.Visible = false
         emojiLabel.Parent = iconContainer
         
-        -- Verificar se imagem carregou (usar emoji como fallback)
+        -- Verificar se logo carregou (usar emoji como fallback)
         task.spawn(function()
-            task.wait(1)
+            task.wait(2)
+            -- Se a imagem não carregou corretamente, mostrar emoji
             if tabIcon.Image == tab.Icon and tabIcon.ImageRectSize == Vector2.new(0, 0) then
                 tabIcon.Visible = false
                 emojiLabel.Visible = true
@@ -1803,12 +1808,16 @@ local function CreateGUI()
                     local stroke = btn:FindFirstChild("UIStroke")
                     if stroke then Tween(stroke, {Color = CONFIG.COR_FUNDO_3}, 0.2) end
                     
-                    -- Resetar cores dos ícones
+                    -- Resetar cores das logos
                     for _, child in pairs(btn:GetChildren()) do
                         if child:IsA("Frame") then
                             for _, subchild in pairs(child:GetChildren()) do
                                 if subchild:IsA("ImageLabel") then
-                                    Tween(subchild, {ImageColor3 = CONFIG.COR_TEXTO_SEC}, 0.2)
+                                    -- Resetar gradient da logo
+                                    local grad = subchild:FindFirstChildOfClass("UIGradient")
+                                    if grad then
+                                        grad.Color = ColorSequence.new(CONFIG.COR_TEXTO_SEC)
+                                    end
                                 elseif subchild:IsA("TextLabel") then
                                     Tween(subchild, {TextColor3 = CONFIG.COR_TEXTO_SEC}, 0.2)
                                 end
@@ -1823,7 +1832,11 @@ local function CreateGUI()
             -- Ativar tab clicada
             Tween(tabBtn, {BackgroundColor3 = CONFIG.COR_PRINCIPAL}, 0.2)
             Tween(tabStroke, {Color = CONFIG.COR_TEXTO}, 0.2)
-            Tween(tabIcon, {ImageColor3 = CONFIG.COR_TEXTO}, 0.2)
+            
+            -- Animar cores dos ícones (logo)
+            if iconColor then
+                iconColor.Color = ColorSequence.new(CONFIG.COR_TEXTO)
+            end
             Tween(emojiLabel, {TextColor3 = CONFIG.COR_TEXTO}, 0.2)
             Tween(tabName, {TextColor3 = CONFIG.COR_TEXTO}, 0.2)
         end)
@@ -1845,7 +1858,9 @@ local function CreateGUI()
         if i == 1 then
             tabBtn.BackgroundColor3 = CONFIG.COR_PRINCIPAL
             tabStroke.Color = CONFIG.COR_TEXTO
-            tabIcon.ImageColor3 = CONFIG.COR_TEXTO
+            if iconColor then
+                iconColor.Color = ColorSequence.new(CONFIG.COR_TEXTO)
+            end
             emojiLabel.TextColor3 = CONFIG.COR_TEXTO
             tabName.TextColor3 = CONFIG.COR_TEXTO
             tabFrame.Visible = true
