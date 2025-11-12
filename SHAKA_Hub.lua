@@ -19,7 +19,7 @@ local Camera = workspace.CurrentCamera
 -- ══════════════════════════════════════════════════════════
 local CONFIG = {
     NOME = "SHAKA",
-    VERSAO = "v3.0",
+    VERSAO = "BETA",
     -- Cores principais do tema
     COR_PRINCIPAL = Color3.fromRGB(169, 3, 252),      -- #A903FC (Roxo vibrante)
     COR_HOVER = Color3.fromRGB(189, 23, 255),         -- Roxo mais claro para hover
@@ -55,11 +55,11 @@ local SavedStates = {
     
     -- ESP
     ESPEnabled = false,
-    ESPBox = true,
-    ESPName = true,
-    ESPDistance = true,
-    ESPHealth = true,
-    ESPTracers = true,
+    ESPBox = false,
+    ESPName = false,
+    ESPDistance = false,
+    ESPHealth = false,
+    ESPTracers = false,
     
     -- Visual
     Fullbright = false,
@@ -326,7 +326,7 @@ local function ToggleFly(state)
             bg.CFrame = CFrame.new(root.Position, root.Position + cam.CFrame.LookVector)
         end)
 
-        Notify("Voo ativado! Use WASD/analógico + pular", CONFIG.COR_SUCESSO, "✈️")
+        Notify("NOCLIP ativado! Use WASD/analógico + pular", CONFIG.COR_SUCESSO, "✈️")
     else
         -- DESATIVA: destruir BG/BV e restaurar propriedades
         if Connections.Fly then Connections.Fly:Disconnect() Connections.Fly = nil end
@@ -365,7 +365,7 @@ local function ToggleFly(state)
             humanoid:ChangeState(Enum.HumanoidStateType.Running)
         end)
 
-        Notify("Voo desativado", CONFIG.COR_ERRO, "✈️")
+        Notify("NOCLIP desativado", CONFIG.COR_ERRO, "✈️")
     end
 end
 
@@ -1031,7 +1031,7 @@ local function CreateGUI()
     UIElements = {}
     
     GUI = Instance.new("ScreenGui")
-    GUI.Name = "SHAKA_V3_PREMIUM"
+    GUI.Name = "SHAKA_(BETA)"
     GUI.ResetOnSpawn = false
     GUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     GUI.Parent = LocalPlayer:WaitForChild("PlayerGui")
@@ -1941,8 +1941,8 @@ local function CreateGUI()
     
     -- ══════════ ABA PLAYER ══════════
     CreateSection("MOVIMENTO", tabFrames["Player"])
-    CreateToggle("Voo", ToggleFly, tabFrames["Player"], "✈️")
-    CreateSlider("Velocidade Voo", 10, 300, SavedStates.FlySpeed, function(v) 
+    CreateToggle("NOCLIP", ToggleFly, tabFrames["Player"], "✈️")
+    CreateSlider("Velocidade NOCLIP", 10, 300, SavedStates.FlySpeed, function(v) 
         SavedStates.FlySpeed = v 
     end, tabFrames["Player"], "⚡")
     
@@ -2264,7 +2264,7 @@ local function CreateGUI()
     CreateFloatingButton()
     
     -- Notificação de carregamento
-    Notify("SHAKA v3.0 Premium carregado com sucesso!", CONFIG.COR_SUCESSO, "🚀")
+    Notify("SHAKA carregado com sucesso!", CONFIG.COR_SUCESSO, "🚀")
     
     -- Animação de borda do menu principal
     task.spawn(function()
@@ -2352,7 +2352,7 @@ print("║  👑 Desenvolvido por 2M | 2025                ║")
 print("╚════════════════════════════════════════════════╝")
 print("")
 print("✅ Funcionalidades carregadas:")
-print("   • Sistema de Voo (PC + Mobile)")
+print("   • Sistema de NOCLIP (PC + Mobile)")
 print("   • Pulo Infinito")
 print("   • ESP completo com todas opções")
 print("   • Aimbot com FOV Circle")
