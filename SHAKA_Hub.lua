@@ -2000,23 +2000,65 @@ local function CreateGUI()
     CreateButton("Arremessar Jogador", FlingPlayer, tabFrames["Troll"], "🌪️", CONFIG.COR_AVISO)
     CreateButton("Girar Jogador", SpinPlayer, tabFrames["Troll"], "🌀", CONFIG.COR_AVISO)
     
-    CreateButton("Copiar Roupa", function()
-        if not SelectedPlayer or not SelectedPlayer.Parent then
-            Notify("Selecione um jogador!", CONFIG.COR_ERRO, "⚠️")
-            return
+    CreateButton("Copiar Aparência", function()
+    if not SelectedPlayer or not SelectedPlayer.Parent then
+        Notify("Selecione um jogador!", CONFIG.COR_ERRO, "⚠️")
+        return
+    end
+
+    pcall(function()
+        local myChar = LocalPlayer.Character
+        local targetChar = SelectedPlayer.Character
+        if not myChar or not targetChar then return end
+
+        -- Remove tudo do personagem local (roupas, acessórios, cores)
+        for _, v in pairs(myChar:GetChildren()) do
+            if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants") or v:IsA("CharacterMesh") or v:IsA("BodyColors") then
+                v:Destroy()
+            end
         end
-        pcall(function()
-            for _, v in pairs(LocalPlayer.Character:GetChildren()) do
-                if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants") then v:Destroy() end
+
+        -- Clona acessórios, roupas, cores, etc.
+        for _, v in pairs(targetChar:GetChildren()) do
+            if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants") or v:IsA("CharacterMesh") or v:IsA("BodyColors") then
+                v:Clone().Parent = myChar
             end
-            for _, v in pairs(SelectedPlayer.Character:GetChildren()) do
-                if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants") then
-                    v:Clone().Parent = LocalPlayer.Character
+        end
+
+        -- Copiar cor da pele (BodyColors pode não existir se for R15)
+        local bodyColors = targetChar:FindFirstChildOfClass("BodyColors")
+        if bodyColors then
+            local newColors = bodyColors:Clone()
+            newColors.Parent = myChar
+        end
+
+        -- Copiar aparência facial (se tiver 'Head' e 'face')
+        local myHead = myChar:FindFirstChild("Head")
+        local targetHead = targetChar:FindFirstChild("Head")
+        if myHead and targetHead then
+            local targetFace = targetHead:FindFirstChildOfClass("Decal")
+            if targetFace then
+                local newFace = targetFace:Clone()
+                for _, f in pairs(myHead:GetChildren()) do
+                    if f:IsA("Decal") then f:Destroy() end
                 end
+                newFace.Parent = myHead
             end
-            Notify("Roupa copiada!", CONFIG.COR_SUCESSO, "👔")
-        end)
-    end, tabFrames["Troll"], "👔")
+        end
+
+        -- Tenta copiar o "HumanoidDescription" (se disponível)
+        local hum = myChar:FindFirstChildOfClass("Humanoid")
+        local targetHum = targetChar:FindFirstChildOfClass("Humanoid")
+        if hum and targetHum and targetHum:FindFirstChildOfClass("HumanoidDescription") then
+            hum:ApplyDescription(targetHum:GetAppliedDescription())
+        elseif hum and targetHum then
+            local desc = targetHum:GetAppliedDescription()
+            hum:ApplyDescription(desc)
+        end
+
+        Notify("Aparência copiada com sucesso!", CONFIG.COR_SUCESSO, "🧍‍♂️")
+    end)
+end, tabFrames["Troll"], "👔")
     
     CreateButton("Seguir Jogador", function()
     if not SelectedPlayer or not SelectedPlayer.Parent then
