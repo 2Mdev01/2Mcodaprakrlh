@@ -1525,7 +1525,7 @@ local function CreateGUI()
     -- LISTA DE JOGADORES (APENAS ABA TROLL)
     -- ═══════════════════════════════════════════════════════
     local playerList = Instance.new("Frame")
-    playerList.Size = UDim2.new(0, 170, 1, -75)
+    playerList.Size = UDim2.new(0, 175, 1, -75)
     playerList.Position = UDim2.new(0, 195, 0, 65)
     playerList.BackgroundColor3 = CONFIG.COR_FUNDO_2
     playerList.BorderSizePixel = 0
@@ -1789,8 +1789,10 @@ local function CreateGUI()
             -- Mostrar lista de jogadores apenas na aba Troll
             if tab.Name == "Troll" then
                 playerList.Visible = true
-                contentContainer.Size = UDim2.new(1, -380, 1, -75)
-                contentContainer.Position = UDim2.new(0, 370, 0, 65)
+                -- Ajustar posições para evitar sobreposição
+                playerList.Position = UDim2.new(0, 195, 0, 65)
+                contentContainer.Size = UDim2.new(1, -385, 1, -75)
+                contentContainer.Position = UDim2.new(0, 380, 0, 65)
             else
                 playerList.Visible = false
                 contentContainer.Size = UDim2.new(1, -200, 1, -75)
