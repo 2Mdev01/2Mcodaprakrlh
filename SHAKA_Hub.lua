@@ -48,6 +48,7 @@ local SavedStates = {
     -- Movimento
     FlyEnabled = false,
     FlySpeed = 100,
+    NoclipEnabled = false,
     InfJumpEnabled = false,
     WalkSpeed = 16,
     JumpPower = 50,
@@ -281,6 +282,30 @@ local function ToggleFly(state)
     end
 end
 
+-- Atravessar paredes
+local function ToggleNoclip(state)
+    SavedStates.NoclipEnabled = state
+    
+    if Connections.Noclip then
+        Connections.Noclip:Disconnect()
+        Connections.Noclip = nil
+    end
+    
+    if state then
+        Connections.Noclip = RunService.Stepped:Connect(function()
+            pcall(function()
+                for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
+                    if v:IsA("BasePart") then 
+                        v.CanCollide = false 
+                    end
+                end
+            end)
+        end)
+        Notify("Noclip ativado", CONFIG.COR_SUCESSO, "👻")
+    else
+        Notify("Noclip desativado", CONFIG.COR_ERRO, "👻")
+    end
+end
 
 -- Pulo infinito
 local function ToggleInfJump(state)
@@ -1852,11 +1877,11 @@ local function CreateGUI()
     
     -- ══════════ ABA PLAYER ══════════
     CreateSection("MOVIMENTO", tabFrames["Player"])
-    CreateToggle("NOCLIP", ToggleFly, tabFrames["Player"], "✈️")
+    CreateToggle("Voo", ToggleFly, tabFrames["Player"], "✈️")
     CreateSlider("Velocidade Voo", 10, 300, SavedStates.FlySpeed, function(v) 
         SavedStates.FlySpeed = v 
     end, tabFrames["Player"], "⚡")
-
+    CreateToggle("Noclip", ToggleNoclip, tabFrames["Player"], "👻")
     CreateToggle("Pulo Infinito", ToggleInfJump, tabFrames["Player"], "🦘")
     
     CreateSection("VELOCIDADE", tabFrames["Player"])
@@ -2175,7 +2200,7 @@ local function CreateGUI()
     CreateFloatingButton()
     
     -- Notificação de carregamento
-    Notify("SHAKA carregado com sucesso!", CONFIG.COR_SUCESSO, "🚀")
+    Notify("SHAKA v3.0 Premium carregado com sucesso!", CONFIG.COR_SUCESSO, "🚀")
     
     -- Animação de borda do menu principal
     task.spawn(function()
