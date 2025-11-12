@@ -189,7 +189,7 @@ end
 -- FUNÇÕES DE MOVIMENTO DO PLAYER
 -- ══════════════════════════════════════════════════════════
 
--- Sistema de voo melhorado (suporta mobile) - REFEITO
+-- Substitua sua função ToggleFly por esta (mantendo a assinatura)
 local function ToggleFly(state)
     SavedStates.FlyEnabled = state
 
@@ -211,10 +211,9 @@ local function ToggleFly(state)
     if not humanoid then return end
 
     if state then
-        -- assegurar valor padrão de velocidade
-        SavedStates.FlySpeed = SavedStates.FlySpeed or 50 -- studs/segundo (ajuste conforme desejar)
+        SavedStates.FlySpeed = SavedStates.FlySpeed or 50 -- ajuste se quiser
 
-        -- Tornar invisível (simples)
+        -- Invisibilidade simples
         for _, v in pairs(char:GetDescendants()) do
             if v:IsA("BasePart") then
                 v.Transparency = 1
@@ -223,27 +222,32 @@ local function ToggleFly(state)
             end
         end
 
-        -- Desativar controles normais do Humanoid para evitar conflitos (humanoid aplicar forças próprias)
-        -- Nota: PlatformStand costuma ser utilizado para evitar que Humanoid atrapalhe o movimento do BodyVelocity.
+        -- Evita que o Humanoid atrapalhe o movimento do BodyVelocity
         pcall(function()
             humanoid.PlatformStand = true
             humanoid.AutoRotate = false
         end)
 
-        -- Criar objetos de física para o voo
-        local bg = Instance.new("BodyGyro")
-        bg.Name = "FlyGyro"
+        -- Criar/garantir BodyGyro + BodyVelocity
+        local bg = root:FindFirstChild("FlyGyro")
+        if not bg then
+            bg = Instance.new("BodyGyro")
+            bg.Name = "FlyGyro"
+            bg.Parent = root
+        end
         bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
         bg.P = 9e4
-        bg.Parent = root
 
-        local bv = Instance.new("BodyVelocity")
-        bv.Name = "FlyVel"
+        local bv = root:FindFirstChild("FlyVel")
+        if not bv then
+            bv = Instance.new("BodyVelocity")
+            bv.Name = "FlyVel"
+            bv.Parent = root
+        end
         bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
         bv.Velocity = Vector3.zero
-        bv.Parent = root
 
-        -- Noclip (mantém CanCollide false enquanto voa)
+        -- Noclip: mantém CanCollide false enquanto voa
         Connections.Noclip = RunService.Stepped:Connect(function()
             pcall(function()
                 for _, part in pairs(char:GetDescendants()) do
@@ -254,8 +258,7 @@ local function ToggleFly(state)
             end)
         end)
 
-        -- Loop principal do voo
-        -- Observação: usamos Heartbeat e calculamos vetor de movimento, normalizamos e multiplicamos pela velocidade
+        -- Loop de voo: calcula direção corretamente em relação à câmera (plano XZ) e aplica velocidade
         Connections.Fly = RunService.Heartbeat:Connect(function(dt)
             if not char or not char.Parent or not root or not root.Parent then
                 ToggleFly(false)
@@ -263,72 +266,80 @@ local function ToggleFly(state)
             end
 
             local speed = SavedStates.FlySpeed or 50
-            local inputVec = Vector3.zero
+            local input = Vector3.new(0, 0, 0)
 
-            -- PC: WASD
-            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-                inputVec = inputVec + Vector3.new(0,0, -1) -- forward (assumimos lookVector depois)
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-                inputVec = inputVec + Vector3.new(0,0, 1)
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-                inputVec = inputVec + Vector3.new(-1,0,0)
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-                inputVec = inputVec + Vector3.new(1,0,0)
-            end
+            -- PC: WASD -> construí um vetor (X = right, Z = forward)
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then input = input + Vector3.new(0, 0, 1) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then input = input + Vector3.new(0, 0, -1) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then input = input + Vector3.new(-1, 0, 0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then input = input + Vector3.new(1, 0, 0) end
 
-            -- Vertical controle PC
-            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-                inputVec = inputVec + Vector3.new(0,1,0)
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-                inputVec = inputVec + Vector3.new(0,-1,0)
-            end
+            -- Vertical PC
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then input = input + Vector3.new(0, 1, 0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then input = input + Vector3.new(0, -1, 0) end
 
-            -- Mobile: GetMoveVector (X,Z)
+            -- Mobile: GetMoveVector -> (X: right/left, Z: forward/back)
             local mv = LocalPlayer:GetMoveVector()
             if mv and mv.Magnitude > 0 then
-                -- mv.X == right/left, mv.Z == forward/back
-                inputVec = inputVec + Vector3.new(mv.X, 0, -mv.Z) -- nota: GetMoveVector.Z é positivo para frente; ajustamos sinal conforme lookVector usage abaixo
+                -- mv.Z é positivo pra frente, queremos consistência com W sendo frente
+                input = input + Vector3.new(mv.X, 0, mv.Z)
             end
 
-            -- Se o Humanoid está em estado Jumping no mobile, subir
+            -- Pulo detectado no humanoid (mobile jump)
             if humanoid and humanoid:GetState() == Enum.HumanoidStateType.Jumping then
-                inputVec = inputVec + Vector3.new(0, 1, 0)
+                input = input + Vector3.new(0, 1, 0)
             end
 
-            -- Transformar inputVec relativo à câmera
+            -- Se não há entrada, reduz velocidade gradualmente para zero (suaviza parada)
+            if input.Magnitude == 0 then
+                bv.Velocity = bv.Velocity:Lerp(Vector3.new(0,0,0), math.clamp(6 * dt, 0, 1))
+                bg.CFrame = CFrame.new(root.Position, root.Position + workspace.CurrentCamera.CFrame.LookVector)
+                return
+            end
+
+            -- Converte input local (XZ) para mundo relativo à câmera.
             local cam = workspace.CurrentCamera
             local camLook = cam.CFrame.LookVector
             local camRight = cam.CFrame.RightVector
 
-            -- Construir direção no mundo: projeta componente X em camRight, Z em camLook, Y direto
-            local worldMove = Vector3.zero
-            worldMove = worldMove + (camRight * inputVec.X)
-            worldMove = worldMove + (camLook * inputVec.Z * -1) -- ajuste por inversão acima
-            worldMove = worldMove + Vector3.new(0, inputVec.Y, 0)
+            -- Projetar para o plano XZ (remover componente Y para evitar inclinações indesejadas)
+            local lookXZ = Vector3.new(camLook.X, 0, camLook.Z)
+            local rightXZ = Vector3.new(camRight.X, 0, camRight.Z)
 
-            -- Normalizar (preserve vertical dominance se apenas Y)
-            if worldMove.Magnitude > 0 then
-                worldMove = worldMove.Unit * speed
+            if lookXZ.Magnitude > 0 then lookXZ = lookXZ.Unit end
+            if rightXZ.Magnitude > 0 then rightXZ = rightXZ.Unit end
+
+            -- input.Z = forward/back, input.X = right/left
+            local worldMovement = (rightXZ * input.X) + (lookXZ * input.Z) + Vector3.new(0, input.Y, 0)
+
+            -- Normalizar direção e aplicar velocidade desejada (preserva direção vertical se só Y)
+            if Vector3.new(worldMovement.X, 0, worldMovement.Z).Magnitude > 0 then
+                local horizontal = Vector3.new(worldMovement.X, 0, worldMovement.Z).Unit * speed
+                worldMovement = Vector3.new(horizontal.X, worldMovement.Y * speed, horizontal.Z)
             else
-                worldMove = Vector3.zero
+                worldMovement = Vector3.new(0, worldMovement.Y * speed, 0)
             end
 
-            -- Aplicar ao BodyVelocity e alinhar BodyGyro com a câmera
+            -- Aplicar ao BodyVelocity (foco no cliente)
             if bv and bv.Parent then
-                bv.Velocity = worldMove
+                bv.Velocity = worldMovement
+            else
+                -- Fallback: tentar setar AssemblyLinearVelocity (pode não funcionar em alguns ambientes)
+                pcall(function()
+                    root.AssemblyLinearVelocity = worldMovement
+                end)
             end
+
+            -- Alinhar orientação do BodyGyro com a câmera (foco visual)
             if bg and bg.Parent then
                 bg.CFrame = CFrame.new(root.Position, root.Position + camLook)
             end
         end)
 
         Notify("Voo ativado! Use WASD/Analógico + Pular", CONFIG.COR_SUCESSO, "✈️")
+
     else
-        -- Remover objetos de física
+        -- Destruir objetos de física
         if root then
             local gyro = root:FindFirstChild("FlyGyro")
             local vel = root:FindFirstChild("FlyVel")
@@ -336,7 +347,7 @@ local function ToggleFly(state)
             if vel then vel:Destroy() end
         end
 
-        -- Reaparecer e restaurar colisões
+        -- Restaurar visibilidade e colisões
         for _, v in pairs(char:GetDescendants()) do
             if v:IsA("BasePart") then
                 v.Transparency = 0
@@ -346,7 +357,7 @@ local function ToggleFly(state)
             end
         end
 
-        -- Restaurar Humanoid
+        -- Restaurar humanoid
         pcall(function()
             humanoid.PlatformStand = false
             humanoid.AutoRotate = true
@@ -355,8 +366,6 @@ local function ToggleFly(state)
         Notify("Voo desativado", CONFIG.COR_ERRO, "✈️")
     end
 end
-
-
 
 
 
