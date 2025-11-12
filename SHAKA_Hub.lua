@@ -1152,7 +1152,7 @@ local function CreateGUI()
     subtitle.Size = UDim2.new(0, 250, 0, 16)
     subtitle.Position = UDim2.new(0, 65, 0, 32)
     subtitle.BackgroundTransparency = 1
-    subtitle.Text = "⚡ " .. CONFIG.NOME .. " " .. CONFIG.VERSAO .. " Premium"
+    subtitle.Text = "🎈 " .. CONFIG.NOME .. " " .. CONFIG.VERSAO 
     subtitle.TextColor3 = CONFIG.COR_PRINCIPAL
     subtitle.TextSize = 11
     subtitle.Font = Enum.Font.Gotham
