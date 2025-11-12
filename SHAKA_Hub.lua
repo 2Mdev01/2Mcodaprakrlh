@@ -1143,32 +1143,38 @@ local function CreateGUI()
     contentContainer.Parent = main
     
     -- ═══════════════════════════════════════════════════════
-    -- DEFINIÇÃO DAS TABS COM ÍCONES
+    -- DEFINIÇÃO DAS TABS COM ÍCONES (usando URLs de imagens)
     -- ═══════════════════════════════════════════════════════
     local tabs = {
         {
             Name = "Player", 
-            Icon = "https://raw.githubusercontent.com/evokelektrique/Material-Icons-SVG/master/icons/person.svg"
+            Icon = "rbxassetid://3926305904",  -- Ícone de pessoa
+            Emoji = "👤"
         },
         {
             Name = "Troll", 
-            Icon = "https://raw.githubusercontent.com/evokelektrique/Material-Icons-SVG/master/icons/mood_bad.svg"
+            Icon = "rbxassetid://3926307971",  -- Ícone de rosto
+            Emoji = "😈"
         },
         {
             Name = "Aimbot", 
-            Icon = "https://raw.githubusercontent.com/evokelektrique/Material-Icons-SVG/master/icons/gps_fixed.svg"
+            Icon = "rbxassetid://3926305904",  -- Ícone de mira
+            Emoji = "🎯"
         },
         {
             Name = "ESP", 
-            Icon = "https://raw.githubusercontent.com/evokelektrique/Material-Icons-SVG/master/icons/visibility.svg"
+            Icon = "rbxassetid://3926305904",  -- Ícone de olho
+            Emoji = "👁️"
         },
         {
             Name = "Visual", 
-            Icon = "https://raw.githubusercontent.com/evokelektrique/Material-Icons-SVG/master/icons/palette.svg"
+            Icon = "rbxassetid://3926305904",  -- Ícone de paleta
+            Emoji = "✨"
         },
         {
             Name = "Config", 
-            Icon = "https://raw.githubusercontent.com/evokelektrique/Material-Icons-SVG/master/icons/settings.svg"
+            Icon = "rbxassetid://3926305904",  -- Ícone de engrenagem
+            Emoji = "⚙️"
         }
     }
     
@@ -1476,17 +1482,40 @@ local function CreateGUI()
         return btn
     end
     
-    -- Criar seção (título de divisão)
+    -- Criar seção (título de divisão) - VERSÃO MELHORADA
     local function CreateSection(text, parent)
-        local section = Instance.new("TextLabel")
-        section.Size = UDim2.new(1, 0, 0, 28)
+        local section = Instance.new("Frame")
+        section.Size = UDim2.new(1, 0, 0, 32)
         section.BackgroundTransparency = 1
-        section.Text = "━━ " .. text .. " ━━"
-        section.TextColor3 = CONFIG.COR_PRINCIPAL
-        section.TextSize = 11
-        section.Font = Enum.Font.GothamBold
-        section.TextXAlignment = Enum.TextXAlignment.Center
         section.Parent = parent
+        
+        local line1 = Instance.new("Frame")
+        line1.Size = UDim2.new(0.3, 0, 0, 2)
+        line1.Position = UDim2.new(0, 0, 0.5, -1)
+        line1.BackgroundColor3 = CONFIG.COR_PRINCIPAL
+        line1.BorderSizePixel = 0
+        line1.Parent = section
+        
+        Instance.new("UICorner", line1).CornerRadius = UDim.new(1, 0)
+        
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(0.4, 0, 1, 0)
+        label.Position = UDim2.new(0.3, 0, 0, 0)
+        label.BackgroundTransparency = 1
+        label.Text = text
+        label.TextColor3 = CONFIG.COR_PRINCIPAL
+        label.TextSize = 12
+        label.Font = Enum.Font.GothamBold
+        label.Parent = section
+        
+        local line2 = Instance.new("Frame")
+        line2.Size = UDim2.new(0.3, 0, 0, 2)
+        line2.Position = UDim2.new(0.7, 0, 0.5, -1)
+        line2.BackgroundColor3 = CONFIG.COR_PRINCIPAL
+        line2.BorderSizePixel = 0
+        line2.Parent = section
+        
+        Instance.new("UICorner", line2).CornerRadius = UDim.new(1, 0)
         
         return section
     end
@@ -1677,13 +1706,15 @@ local function CreateGUI()
         tabStroke.Transparency = 0.5
         tabStroke.Parent = tabBtn
         
-        -- Ícone (imagem da web)
-        local tabIcon = Instance.new("ImageLabel")
-        tabIcon.Size = UDim2.new(0, 24, 0, 24)
-        tabIcon.Position = UDim2.new(0.5, -12, 0, 8)
+        -- Ícone (usando emoji ao invés de imagem)
+        local tabIcon = Instance.new("TextLabel")
+        tabIcon.Size = UDim2.new(0, 28, 0, 28)
+        tabIcon.Position = UDim2.new(0.5, -14, 0, 8)
         tabIcon.BackgroundTransparency = 1
-        tabIcon.Image = tab.Icon
-        tabIcon.ImageColor3 = CONFIG.COR_TEXTO_SEC
+        tabIcon.Text = tab.Emoji
+        tabIcon.TextColor3 = CONFIG.COR_TEXTO_SEC
+        tabIcon.TextSize = 20
+        tabIcon.Font = Enum.Font.GothamBold
         tabIcon.Parent = tabBtn
         
         -- Nome da tab
@@ -1744,9 +1775,7 @@ local function CreateGUI()
                     local stroke = btn:FindFirstChild("UIStroke")
                     if stroke then Tween(stroke, {Color = CONFIG.COR_FUNDO_3}, 0.2) end
                     for _, child in pairs(btn:GetChildren()) do
-                        if child:IsA("ImageLabel") then
-                            Tween(child, {ImageColor3 = CONFIG.COR_TEXTO_SEC}, 0.2)
-                        elseif child:IsA("TextLabel") then
+                        if child:IsA("TextLabel") and child.Name ~= "TextLabel" then
                             Tween(child, {TextColor3 = CONFIG.COR_TEXTO_SEC}, 0.2)
                         end
                     end
@@ -1756,7 +1785,7 @@ local function CreateGUI()
             -- Ativar tab clicada
             Tween(tabBtn, {BackgroundColor3 = CONFIG.COR_PRINCIPAL}, 0.2)
             Tween(tabStroke, {Color = CONFIG.COR_TEXTO}, 0.2)
-            Tween(tabIcon, {ImageColor3 = CONFIG.COR_TEXTO}, 0.2)
+            Tween(tabIcon, {TextColor3 = CONFIG.COR_TEXTO}, 0.2)
             Tween(tabName, {TextColor3 = CONFIG.COR_TEXTO}, 0.2)
         end)
         
@@ -1764,11 +1793,14 @@ local function CreateGUI()
         if i == 1 then
             tabBtn.BackgroundColor3 = CONFIG.COR_PRINCIPAL
             tabStroke.Color = CONFIG.COR_TEXTO
-            tabIcon.ImageColor3 = CONFIG.COR_TEXTO
+            tabIcon.TextColor3 = CONFIG.COR_TEXTO
             tabName.TextColor3 = CONFIG.COR_TEXTO
             tabFrame.Visible = true
         end
     end
+    
+    -- IMPORTANTE: Aguardar 0.1s antes de criar o conteúdo para garantir que as tabs existam
+    task.wait(0.1)
     
     -- ═══════════════════════════════════════════════════════
     -- CONTEÚDO DAS ABAS
