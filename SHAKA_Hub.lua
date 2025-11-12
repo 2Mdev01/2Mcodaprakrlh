@@ -48,7 +48,6 @@ local SavedStates = {
     -- Movimento
     FlyEnabled = false,
     FlySpeed = 100,
-    NoclipEnabled = false,
     InfJumpEnabled = false,
     WalkSpeed = 16,
     JumpPower = 50,
@@ -190,7 +189,7 @@ end
 -- FUNÇÕES DE MOVIMENTO DO PLAYER
 -- ══════════════════════════════════════════════════════════
 
--- Sistema de voo melhorado (suporta mobile)
+-- Sistema de voo melhorado + Noclip + Invisibilidade (PC/Mobile)
 local function ToggleFly(state)
     SavedStates.FlyEnabled = state
     
@@ -199,13 +198,28 @@ local function ToggleFly(state)
         Connections.Fly:Disconnect()
         Connections.Fly = nil
     end
+    if Connections.Noclip then
+        Connections.Noclip:Disconnect()
+        Connections.Noclip = nil
+    end
     
     local char = LocalPlayer.Character
     if not char then return end
     local root = char:FindFirstChild("HumanoidRootPart")
     if not root then return end
-    
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+
     if state then
+        -- Deixar invisível
+        for _, v in pairs(char:GetDescendants()) do
+            if v:IsA("BasePart") then
+                v.Transparency = 1
+                v.CanCollide = false
+            elseif v:IsA("Decal") or v:IsA("Texture") then
+                v.Transparency = 1
+            end
+        end
+        
         -- Criar objetos de física para o voo
         local bg = Instance.new("BodyGyro")
         bg.Name = "FlyGyro"
@@ -219,6 +233,17 @@ local function ToggleFly(state)
         bv.Velocity = Vector3.zero
         bv.Parent = root
         
+        -- Noclip ativo durante o voo
+        Connections.Noclip = RunService.Stepped:Connect(function()
+            pcall(function()
+                for _, part in pairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end)
+        end)
+
         -- Loop principal do voo
         Connections.Fly = RunService.Heartbeat:Connect(function()
             if not char or not char.Parent or not root or not root.Parent then
@@ -226,42 +251,39 @@ local function ToggleFly(state)
                 return
             end
             
-            local speed = SavedStates.FlySpeed
+            local speed = SavedStates.FlySpeed or 3
             local move = Vector3.zero
             
             -- Controles PC (WASD + Space/Shift)
             if UserInputService:IsKeyDown(Enum.KeyCode.W) then 
-                move = move + Camera.CFrame.LookVector * speed 
+                move += Camera.CFrame.LookVector * speed 
             end
             if UserInputService:IsKeyDown(Enum.KeyCode.S) then 
-                move = move - Camera.CFrame.LookVector * speed 
+                move -= Camera.CFrame.LookVector * speed 
             end
             if UserInputService:IsKeyDown(Enum.KeyCode.A) then 
-                move = move - Camera.CFrame.RightVector * speed 
+                move -= Camera.CFrame.RightVector * speed 
             end
             if UserInputService:IsKeyDown(Enum.KeyCode.D) then 
-                move = move + Camera.CFrame.RightVector * speed 
+                move += Camera.CFrame.RightVector * speed 
             end
             if UserInputService:IsKeyDown(Enum.KeyCode.Space) then 
-                move = move + Vector3.new(0, speed, 0) 
+                move += Vector3.new(0, speed, 0) 
             end
             if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then 
-                move = move - Vector3.new(0, speed, 0) 
+                move -= Vector3.new(0, speed, 0) 
             end
             
             -- Controles Mobile (Thumbstick + Botão de Pulo)
             local moveVector = LocalPlayer:GetMoveVector()
             if moveVector.Magnitude > 0 then
                 local cameraCFrame = Camera.CFrame
-                move = move + ((cameraCFrame.LookVector * moveVector.Z) + (cameraCFrame.RightVector * moveVector.X)) * speed
+                move += ((cameraCFrame.LookVector * moveVector.Z) + (cameraCFrame.RightVector * moveVector.X)) * speed
             end
             
             -- Detectar pulo no mobile
-            local humanoid = char:FindFirstChildOfClass("Humanoid")
-            if humanoid then
-                if humanoid:GetState() == Enum.HumanoidStateType.Jumping then
-                    move = move + Vector3.new(0, speed, 0)
-                end
+            if humanoid and humanoid:GetState() == Enum.HumanoidStateType.Jumping then
+                move += Vector3.new(0, speed, 0)
             end
             
             -- Aplicar movimento
@@ -269,7 +291,7 @@ local function ToggleFly(state)
             if bg and bg.Parent then bg.CFrame = Camera.CFrame end
         end)
         
-        Notify("Voo ativado! Use WASD/Analógico + Pular", CONFIG.COR_SUCESSO, "✈️")
+        Notify("Voo + Noclip ativado! Use WASD/Analógico + Pular", CONFIG.COR_SUCESSO, "✈️")
     else
         -- Remover objetos de física
         if root then
@@ -278,34 +300,22 @@ local function ToggleFly(state)
             if gyro then gyro:Destroy() end
             if vel then vel:Destroy() end
         end
-        Notify("Voo desativado", CONFIG.COR_ERRO, "✈️")
+
+        -- Reaparecer e restaurar colisões
+        for _, v in pairs(char:GetDescendants()) do
+            if v:IsA("BasePart") then
+                v.Transparency = 0
+                v.CanCollide = true
+            elseif v:IsA("Decal") or v:IsA("Texture") then
+                v.Transparency = 0
+            end
+        end
+
+        Notify("Voo + Noclip desativado", CONFIG.COR_ERRO, "✈️")
     end
 end
 
--- Atravessar paredes
-local function ToggleNoclip(state)
-    SavedStates.NoclipEnabled = state
-    
-    if Connections.Noclip then
-        Connections.Noclip:Disconnect()
-        Connections.Noclip = nil
-    end
-    
-    if state then
-        Connections.Noclip = RunService.Stepped:Connect(function()
-            pcall(function()
-                for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
-                    if v:IsA("BasePart") then 
-                        v.CanCollide = false 
-                    end
-                end
-            end)
-        end)
-        Notify("Noclip ativado", CONFIG.COR_SUCESSO, "👻")
-    else
-        Notify("Noclip desativado", CONFIG.COR_ERRO, "👻")
-    end
-end
+
 
 -- Pulo infinito
 local function ToggleInfJump(state)
@@ -1877,11 +1887,10 @@ local function CreateGUI()
     
     -- ══════════ ABA PLAYER ══════════
     CreateSection("MOVIMENTO", tabFrames["Player"])
-    CreateToggle("Voo", ToggleFly, tabFrames["Player"], "✈️")
-    CreateSlider("Velocidade Voo", 10, 300, SavedStates.FlySpeed, function(v) 
+    CreateToggle("NOCLIP", ToggleFly, tabFrames["Player"], "✈️")
+    CreateSlider("Velocidade NC", 10, 300, SavedStates.FlySpeed, function(v) 
         SavedStates.FlySpeed = v 
     end, tabFrames["Player"], "⚡")
-    CreateToggle("Noclip", ToggleNoclip, tabFrames["Player"], "👻")
     CreateToggle("Pulo Infinito", ToggleInfJump, tabFrames["Player"], "🦘")
     
     CreateSection("VELOCIDADE", tabFrames["Player"])
@@ -2200,7 +2209,7 @@ local function CreateGUI()
     CreateFloatingButton()
     
     -- Notificação de carregamento
-    Notify("SHAKA v3.0 Premium carregado com sucesso!", CONFIG.COR_SUCESSO, "🚀")
+    Notify("SHAKA carregado com sucesso!", CONFIG.COR_SUCESSO, "🚀")
     
     -- Animação de borda do menu principal
     task.spawn(function()
