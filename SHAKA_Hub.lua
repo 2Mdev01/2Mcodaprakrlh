@@ -1144,37 +1144,37 @@ local function CreateGUI()
     contentContainer.Parent = main
     
     -- ═══════════════════════════════════════════════════════
-    -- DEFINIÇÃO DAS TABS COM ÍCONES
+    -- DEFINIÇÃO DAS TABS COM ÍCONES (LOGOS DA WEB)
     -- ═══════════════════════════════════════════════════════
     local tabs = {
         {
             Name = "Player",
-            Icon = "rbxassetid://3926305904",  -- Ícone de pessoa
+            Icon = "https://cdn-icons-png.flaticon.com/512/1077/1077012.png",  -- Logo de usuário
             Emoji = "👤"
         },
         {
             Name = "Troll",
-            Icon = "rbxassetid://3926307971",  -- Ícone de raio
+            Icon = "https://cdn-icons-png.flaticon.com/512/2584/2584606.png",  -- Logo de diabinho
             Emoji = "😈"
         },
         {
             Name = "Aimbot",
-            Icon = "rbxassetid://3926305904",  -- Ícone de alvo
+            Icon = "https://cdn-icons-png.flaticon.com/512/2583/2583780.png",  -- Logo de alvo
             Emoji = "🎯"
         },
         {
             Name = "ESP",
-            Icon = "rbxassetid://3926305904",  -- Ícone de olho
+            Icon = "https://cdn-icons-png.flaticon.com/512/159/159604.png",  -- Logo de olho
             Emoji = "👁️"
         },
         {
             Name = "Visual",
-            Icon = "rbxassetid://3926305904",  -- Ícone de estrela
+            Icon = "https://cdn-icons-png.flaticon.com/512/2970/2970260.png",  -- Logo de estrela
             Emoji = "✨"
         },
         {
             Name = "Config",
-            Icon = "rbxassetid://3926305904",  -- Ícone de engrenagem
+            Icon = "https://cdn-icons-png.flaticon.com/512/3524/3524659.png",  -- Logo de engrenagem
             Emoji = "⚙️"
         }
     }
