@@ -189,122 +189,186 @@ end
 -- FUNÇÕES DE MOVIMENTO DO PLAYER
 -- ══════════════════════════════════════════════════════════
 
+-- Versão final da função ToggleFly (sem GetMoveVector)
 local function ToggleFly(state)
-	SavedStates.FlyEnabled = state
+    SavedStates.FlyEnabled = state
 
-	if Connections.Fly then Connections.Fly:Disconnect() Connections.Fly = nil end
-	if Connections.Noclip then Connections.Noclip:Disconnect() Connections.Noclip = nil end
+    -- limpar conexões anteriores
+    if Connections.Fly then Connections.Fly:Disconnect() Connections.Fly = nil end
+    if Connections.Noclip then Connections.Noclip:Disconnect() Connections.Noclip = nil end
 
-	local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-	local root = char:WaitForChild("HumanoidRootPart")
-	local humanoid = char:WaitForChild("Humanoid")
+    -- referências seguras
+    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local root = char:WaitForChild("HumanoidRootPart")
+    local humanoid = char:WaitForChild("Humanoid")
 
-	if state then
-		SavedStates.FlySpeed = SavedStates.FlySpeed or 50
+    -- garantir tabela pra salvar propriedades originais
+    SavedStates._originalParts = SavedStates._originalParts or {}
 
-		-- Invisibilidade
-		for _, v in pairs(char:GetDescendants()) do
-			if v:IsA("BasePart") then v.Transparency = 1 end
-			if v:IsA("Decal") or v:IsA("Texture") then v.Transparency = 1 end
-		end
+    if state then
+        SavedStates.FlySpeed = SavedStates.FlySpeed or 60
 
-		-- Preparar física livre
-		humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-		humanoid.PlatformStand = true
-		humanoid.AutoRotate = false
+        -- salvar e tornar invisível / noclip
+        SavedStates._originalParts = {}
+        for _, v in pairs(char:GetDescendants()) do
+            if v:IsA("BasePart") then
+                SavedStates._originalParts[v] = {Transparency = v.Transparency, CanCollide = v.CanCollide}
+                v.Transparency = 1
+                v.CanCollide = false
+            elseif v:IsA("Decal") or v:IsA("Texture") then
+                SavedStates._originalParts[v] = {Transparency = v.Transparency}
+                v.Transparency = 1
+            end
+        end
 
-		local bg = Instance.new("BodyGyro")
-		bg.Name = "FlyGyro"
-		bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-		bg.P = 9e4
-		bg.Parent = root
+        -- reduzir interferência do Humanoid
+        pcall(function()
+            humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+            humanoid.PlatformStand = true
+            humanoid.AutoRotate = false
+        end)
 
-		local bv = Instance.new("BodyVelocity")
-		bv.Name = "FlyVel"
-		bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-		bv.Velocity = Vector3.zero
-		bv.Parent = root
+        -- criar BodyGyro / BodyVelocity
+        local bg = root:FindFirstChild("FlyGyro")
+        if not bg then
+            bg = Instance.new("BodyGyro")
+            bg.Name = "FlyGyro"
+            bg.Parent = root
+        end
+        bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+        bg.P = 9e4
 
-		-- Noclip
-		Connections.Noclip = RunService.Stepped:Connect(function()
-			for _, v in pairs(char:GetDescendants()) do
-				if v:IsA("BasePart") then v.CanCollide = false end
-			end
-		end)
+        local bv = root:FindFirstChild("FlyVel")
+        if not bv then
+            bv = Instance.new("BodyVelocity")
+            bv.Name = "FlyVel"
+            bv.Parent = root
+        end
+        bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        bv.Velocity = Vector3.zero
 
-		-- Loop de voo
-		Connections.Fly = RunService.RenderStepped:Connect(function()
-	if not SavedStates.FlyEnabled then return end
-	if not char or not root or not root.Parent then return end
+        -- noclip loop
+        Connections.Noclip = RunService.Stepped:Connect(function()
+            pcall(function()
+                for _, p in pairs(char:GetDescendants()) do
+                    if p:IsA("BasePart") then
+                        p.CanCollide = false
+                    end
+                end
+            end)
+        end)
 
-	local move = Vector3.zero
-	local speed = SavedStates.FlySpeed
-	local cam = workspace.CurrentCamera
+        -- loop principal: usa Humanoid.MoveDirection (compatível PC/Mobile) e fallback para teclado
+        Connections.Fly = RunService.RenderStepped:Connect(function(dt)
+            if not SavedStates.FlyEnabled then return end
+            if not char or not root or not root.Parent then
+                ToggleFly(false)
+                return
+            end
 
-	-- Controles PC (WASD + Espaço + Shift)
-	if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-		move = move + cam.CFrame.LookVector
-	end
-	if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-		move = move - cam.CFrame.LookVector
-	end
-	if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-		move = move - cam.CFrame.RightVector
-	end
-	if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-		move = move + cam.CFrame.RightVector
-	end
-	if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-		move = move + Vector3.new(0, 1, 0)
-	end
-	if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-		move = move - Vector3.new(0, 1, 0)
-	end
+            local speed = SavedStates.FlySpeed or 60
+            local move = Vector3.zero
+            local cam = workspace.CurrentCamera
 
-	-- Controles Mobile (somente se suportado)
-	local moveVector = nil
-	pcall(function()
-		if typeof(LocalPlayer.GetMoveVector) == "function" then
-			moveVector = LocalPlayer:GetMoveVector()
-		end
-	end)
+            -- 1) primeiro, tenta Humanoid.MoveDirection (funciona pra teclado e touch se o controlador estiver padrão)
+            local md = Vector3.zero
+            pcall(function() md = humanoid.MoveDirection end)
+            if md and typeof(md) == "Vector3" and md.Magnitude > 0 then
+                -- MoveDirection é vetor mundial (Y costuma ser 0)
+                move = move + Vector3.new(md.X, 0, md.Z)
+            end
 
-	if moveVector and typeof(moveVector) == "Vector3" and moveVector.Magnitude > 0 then
-		move = move + ((cam.CFrame.LookVector * moveVector.Z) + (cam.CFrame.RightVector * moveVector.X))
-	end
+            -- 2) fallback: ler teclado direto (casos onde MoveDirection não atualiza)
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                move = move + cam.CFrame.LookVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                move = move - cam.CFrame.LookVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                move = move - cam.CFrame.RightVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                move = move + cam.CFrame.RightVector
+            end
 
-	-- Aplicar movimento
-	if move.Magnitude > 0 then
-		move = move.Unit * speed
-	end
-	bv.Velocity = move
-	bg.CFrame = CFrame.new(root.Position, root.Position + cam.CFrame.LookVector)
-end)
+            -- vertical control (teclado)
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                move = move + Vector3.new(0, 1, 0)
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                move = move - Vector3.new(0, 1, 0)
+            end
 
+            -- se o jogador apertou o botão de pular no mobile, detectar estado de Jumping
+            if humanoid and humanoid:GetState() == Enum.HumanoidStateType.Jumping then
+                move = move + Vector3.new(0, 1, 0)
+            end
 
-		Notify("Voo ativado! Use WASD ou analógico + espaço", CONFIG.COR_SUCESSO, "✈️")
+            -- Se MoveDirection forneceu apenas horizontal (y=0) e teclado forneceu vetores câmera, normalizar corretamente:
+            if move.Magnitude > 0 then
+                -- Se move contém componentes de câmera (não apenas MoveDirection), convertê-los para plano XZ para evitar inclinações
+                -- No geral, aqui normalizamos e aplicamos velocidade. Mantemos componente Y proporcional.
+                local vertical = move.Y
+                local horizontal = Vector3.new(move.X, 0, move.Z)
+                if horizontal.Magnitude > 0 then
+                    horizontal = horizontal.Unit * speed
+                end
+                local finalVel = Vector3.new(horizontal.X, vertical * speed, horizontal.Z)
+                -- suavização (lerp) para evitar tranco
+                bv.Velocity = bv.Velocity:Lerp(finalVel, math.clamp(10 * dt, 0, 1))
+            else
+                -- desacelera suavemente quando não há input
+                bv.Velocity = bv.Velocity:Lerp(Vector3.new(0, 0, 0), math.clamp(6 * dt, 0, 1))
+            end
 
-	else
-		if Connections.Fly then Connections.Fly:Disconnect() Connections.Fly = nil end
-		if Connections.Noclip then Connections.Noclip:Disconnect() Connections.Noclip = nil end
+            -- alinhar orientação do gyro com a câmera (apenas visual)
+            bg.CFrame = CFrame.new(root.Position, root.Position + cam.CFrame.LookVector)
+        end)
 
-		local gyro = root:FindFirstChild("FlyGyro")
-		local vel = root:FindFirstChild("FlyVel")
-		if gyro then gyro:Destroy() end
-		if vel then vel:Destroy() end
+        Notify("Voo ativado! Use WASD/analógico + pular", CONFIG.COR_SUCESSO, "✈️")
+    else
+        -- DESATIVA: destruir BG/BV e restaurar propriedades
+        if Connections.Fly then Connections.Fly:Disconnect() Connections.Fly = nil end
+        if Connections.Noclip then Connections.Noclip:Disconnect() Connections.Noclip = nil end
 
-		for _, v in pairs(char:GetDescendants()) do
-			if v:IsA("BasePart") then v.Transparency = 0 v.CanCollide = true end
-			if v:IsA("Decal") or v:IsA("Texture") then v.Transparency = 0 end
-		end
+        local gyro = root:FindFirstChild("FlyGyro")
+        local vel = root:FindFirstChild("FlyVel")
+        if gyro then gyro:Destroy() end
+        if vel then vel:Destroy() end
 
-		humanoid.PlatformStand = false
-		humanoid:ChangeState(Enum.HumanoidStateType.Running)
-		humanoid.AutoRotate = true
+        -- restaurar partes originais (apenas as que salvamos)
+        if SavedStates._originalParts then
+            for part, props in pairs(SavedStates._originalParts) do
+                if part and part.Parent then
+                    pcall(function()
+                        if props.Transparency ~= nil then part.Transparency = props.Transparency end
+                        if props.CanCollide ~= nil then part.CanCollide = props.CanCollide end
+                    end)
+                end
+            end
+            SavedStates._originalParts = nil
+        else
+            -- fallback: reaparecer tudo
+            for _, v in pairs(char:GetDescendants()) do
+                if v:IsA("BasePart") then
+                    pcall(function() v.Transparency = 0 v.CanCollide = true end)
+                elseif v:IsA("Decal") or v:IsA("Texture") then
+                    pcall(function() v.Transparency = 0 end)
+                end
+            end
+        end
 
-		Notify("Voo desativado", CONFIG.COR_ERRO, "✈️")
-	end
+        pcall(function()
+            humanoid.PlatformStand = false
+            humanoid.AutoRotate = true
+            humanoid:ChangeState(Enum.HumanoidStateType.Running)
+        end)
+
+        Notify("Voo desativado", CONFIG.COR_ERRO, "✈️")
+    end
 end
+
 
 
 -- Pulo infinito
