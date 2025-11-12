@@ -189,6 +189,7 @@ end
 -- FUNÇÕES DE MOVIMENTO DO PLAYER
 -- ══════════════════════════════════════════════════════════
 
+-- Sistema de voo melhorado (suporta mobile) - REFEITO
 local function ToggleFly(state)
 	SavedStates.FlyEnabled = state
 
