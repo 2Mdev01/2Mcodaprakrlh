@@ -1143,37 +1143,37 @@ local function CreateGUI()
     contentContainer.Parent = main
     
     -- ═══════════════════════════════════════════════════════
-    -- DEFINIÇÃO DAS TABS COM ÍCONES (usando URLs de imagens)
+    -- DEFINIÇÃO DAS TABS COM ÍCONES
     -- ═══════════════════════════════════════════════════════
     local tabs = {
         {
             Name = "Player", 
-            Icon = "rbxassetid://3926305904",  -- Ícone de pessoa
+            Icon = "https://cdn-icons-png.flaticon.com/512/1077/1077012.png",
             Emoji = "👤"
         },
         {
             Name = "Troll", 
-            Icon = "rbxassetid://3926307971",  -- Ícone de rosto
+            Icon = "https://cdn-icons-png.flaticon.com/512/2584/2584606.png",
             Emoji = "😈"
         },
         {
             Name = "Aimbot", 
-            Icon = "rbxassetid://3926305904",  -- Ícone de mira
+            Icon = "https://cdn-icons-png.flaticon.com/512/2583/2583780.png",
             Emoji = "🎯"
         },
         {
             Name = "ESP", 
-            Icon = "rbxassetid://3926305904",  -- Ícone de olho
+            Icon = "https://cdn-icons-png.flaticon.com/512/159/159604.png",
             Emoji = "👁️"
         },
         {
             Name = "Visual", 
-            Icon = "rbxassetid://3926305904",  -- Ícone de paleta
+            Icon = "https://cdn-icons-png.flaticon.com/512/2970/2970260.png",
             Emoji = "✨"
         },
         {
             Name = "Config", 
-            Icon = "rbxassetid://3926305904",  -- Ícone de engrenagem
+            Icon = "https://cdn-icons-png.flaticon.com/512/3524/3524659.png",
             Emoji = "⚙️"
         }
     }
@@ -1521,7 +1521,7 @@ local function CreateGUI()
     end
     
     -- ═══════════════════════════════════════════════════════
-    -- LISTA DE JOGADORES (APENAS ABA TROLL)
+    -- LISTA DE JOGADORES (APENAS ABA TROLL) - POSIÇÃO CORRIGIDA
     -- ═══════════════════════════════════════════════════════
     local playerList = Instance.new("Frame")
     playerList.Size = UDim2.new(0, 170, 1, -75)
@@ -1529,6 +1529,7 @@ local function CreateGUI()
     playerList.BackgroundColor3 = CONFIG.COR_FUNDO_2
     playerList.BorderSizePixel = 0
     playerList.Visible = false
+    playerList.ZIndex = 2  -- Garantir que fique acima
     playerList.Parent = main
     
     Instance.new("UICorner", playerList).CornerRadius = UDim.new(0, 10)
@@ -1687,7 +1688,7 @@ local function CreateGUI()
     end)
     
     -- ═══════════════════════════════════════════════════════
-    -- CRIAR BOTÕES DAS TABS
+    -- CRIAR BOTÕES DAS TABS COM IMAGENS
     -- ═══════════════════════════════════════════════════════
     for i, tab in ipairs(tabs) do
         local tabBtn = Instance.new("TextButton")
@@ -1706,21 +1707,50 @@ local function CreateGUI()
         tabStroke.Transparency = 0.5
         tabStroke.Parent = tabBtn
         
-        -- Ícone (usando emoji ao invés de imagem)
-        local tabIcon = Instance.new("TextLabel")
-        tabIcon.Size = UDim2.new(0, 28, 0, 28)
-        tabIcon.Position = UDim2.new(0.5, -14, 0, 8)
+        -- Container para o ícone (imagem da web)
+        local iconContainer = Instance.new("Frame")
+        iconContainer.Size = UDim2.new(0, 32, 0, 32)
+        iconContainer.Position = UDim2.new(0.5, -16, 0, 6)
+        iconContainer.BackgroundColor3 = CONFIG.COR_FUNDO
+        iconContainer.BorderSizePixel = 0
+        iconContainer.Parent = tabBtn
+        
+        Instance.new("UICorner", iconContainer).CornerRadius = UDim.new(0, 8)
+        
+        -- Ícone (imagem da web)
+        local tabIcon = Instance.new("ImageLabel")
+        tabIcon.Size = UDim2.new(0, 24, 0, 24)
+        tabIcon.Position = UDim2.new(0.5, -12, 0.5, -12)
         tabIcon.BackgroundTransparency = 1
-        tabIcon.Text = tab.Emoji
-        tabIcon.TextColor3 = CONFIG.COR_TEXTO_SEC
-        tabIcon.TextSize = 20
-        tabIcon.Font = Enum.Font.GothamBold
-        tabIcon.Parent = tabBtn
+        tabIcon.Image = tab.Icon
+        tabIcon.ImageColor3 = CONFIG.COR_TEXTO_SEC
+        tabIcon.ScaleType = Enum.ScaleType.Fit
+        tabIcon.Parent = iconContainer
+        
+        -- Fallback: se imagem não carregar, mostrar emoji
+        local emojiLabel = Instance.new("TextLabel")
+        emojiLabel.Size = UDim2.new(1, 0, 1, 0)
+        emojiLabel.BackgroundTransparency = 1
+        emojiLabel.Text = tab.Emoji
+        emojiLabel.TextColor3 = CONFIG.COR_TEXTO_SEC
+        emojiLabel.TextSize = 20
+        emojiLabel.Font = Enum.Font.GothamBold
+        emojiLabel.Visible = false
+        emojiLabel.Parent = iconContainer
+        
+        -- Verificar se imagem carregou
+        task.spawn(function()
+            task.wait(1)
+            if tabIcon.Image == tab.Icon and tabIcon.ImageRectSize == Vector2.new(0, 0) then
+                tabIcon.Visible = false
+                emojiLabel.Visible = true
+            end
+        end)
         
         -- Nome da tab
         local tabName = Instance.new("TextLabel")
-        tabName.Size = UDim2.new(1, 0, 0, 16)
-        tabName.Position = UDim2.new(0, 0, 0, 32)
+        tabName.Size = UDim2.new(1, 0, 0, 14)
+        tabName.Position = UDim2.new(0, 0, 0, 36)
         tabName.BackgroundTransparency = 1
         tabName.Text = tab.Name
         tabName.TextColor3 = CONFIG.COR_TEXTO_SEC
@@ -1774,8 +1804,18 @@ local function CreateGUI()
                     Tween(btn, {BackgroundColor3 = CONFIG.COR_FUNDO_2}, 0.2)
                     local stroke = btn:FindFirstChild("UIStroke")
                     if stroke then Tween(stroke, {Color = CONFIG.COR_FUNDO_3}, 0.2) end
+                    
+                    -- Resetar cores dos ícones
                     for _, child in pairs(btn:GetChildren()) do
-                        if child:IsA("TextLabel") and child.Name ~= "TextLabel" then
+                        if child:IsA("Frame") then
+                            for _, subchild in pairs(child:GetChildren()) do
+                                if subchild:IsA("ImageLabel") then
+                                    Tween(subchild, {ImageColor3 = CONFIG.COR_TEXTO_SEC}, 0.2)
+                                elseif subchild:IsA("TextLabel") then
+                                    Tween(subchild, {TextColor3 = CONFIG.COR_TEXTO_SEC}, 0.2)
+                                end
+                            end
+                        elseif child:IsA("TextLabel") then
                             Tween(child, {TextColor3 = CONFIG.COR_TEXTO_SEC}, 0.2)
                         end
                     end
@@ -1785,7 +1825,9 @@ local function CreateGUI()
             -- Ativar tab clicada
             Tween(tabBtn, {BackgroundColor3 = CONFIG.COR_PRINCIPAL}, 0.2)
             Tween(tabStroke, {Color = CONFIG.COR_TEXTO}, 0.2)
-            Tween(tabIcon, {TextColor3 = CONFIG.COR_TEXTO}, 0.2)
+            Tween(iconContainer, {BackgroundColor3 = CONFIG.COR_PRINCIPAL}, 0.2)
+            Tween(tabIcon, {ImageColor3 = CONFIG.COR_TEXTO}, 0.2)
+            Tween(emojiLabel, {TextColor3 = CONFIG.COR_TEXTO}, 0.2)
             Tween(tabName, {TextColor3 = CONFIG.COR_TEXTO}, 0.2)
         end)
         
@@ -1793,7 +1835,9 @@ local function CreateGUI()
         if i == 1 then
             tabBtn.BackgroundColor3 = CONFIG.COR_PRINCIPAL
             tabStroke.Color = CONFIG.COR_TEXTO
-            tabIcon.TextColor3 = CONFIG.COR_TEXTO
+            iconContainer.BackgroundColor3 = CONFIG.COR_PRINCIPAL
+            tabIcon.ImageColor3 = CONFIG.COR_TEXTO
+            emojiLabel.TextColor3 = CONFIG.COR_TEXTO
             tabName.TextColor3 = CONFIG.COR_TEXTO
             tabFrame.Visible = true
         end
