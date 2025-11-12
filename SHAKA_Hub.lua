@@ -993,11 +993,30 @@ local function CreateGUI()
     mainStroke.Transparency = 0.5
     mainStroke.Parent = main
     
-    -- Sistema de arrastar o menu
+    -- ═══════════════════════════════════════════════════════
+    -- HEADER COM AVATAR E INFO DO PLAYER (ÁREA DE ARRASTAR)
+    -- ═══════════════════════════════════════════════════════
+    local header = Instance.new("Frame")
+    header.Name = "DragHeader"
+    header.Size = UDim2.new(1, 0, 0, 60)
+    header.BackgroundColor3 = CONFIG.COR_FUNDO_2
+    header.BorderSizePixel = 0
+    header.Parent = main
+    
+    Instance.new("UICorner", header).CornerRadius = UDim.new(0, 15)
+    
+    local headerBottom = Instance.new("Frame")
+    headerBottom.Size = UDim2.new(1, 0, 0, 15)
+    headerBottom.Position = UDim2.new(0, 0, 1, -15)
+    headerBottom.BackgroundColor3 = CONFIG.COR_FUNDO_2
+    headerBottom.BorderSizePixel = 0
+    headerBottom.Parent = header
+    
+    -- SISTEMA DE ARRASTAR - APENAS NO HEADER
     local dragging = false
     local dragInput, dragStart, startPos
     
-    main.InputBegan:Connect(function(input)
+    header.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or 
            input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
@@ -1012,7 +1031,7 @@ local function CreateGUI()
         end
     end)
     
-    main.InputChanged:Connect(function(input)
+    header.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or 
            input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
@@ -1035,25 +1054,7 @@ local function CreateGUI()
         end
     end)
     
-    -- ═══════════════════════════════════════════════════════
-    -- HEADER COM AVATAR E INFO DO PLAYER
-    -- ═══════════════════════════════════════════════════════
-    local header = Instance.new("Frame")
-    header.Size = UDim2.new(1, 0, 0, 60)
-    header.BackgroundColor3 = CONFIG.COR_FUNDO_2
-    header.BorderSizePixel = 0
-    header.Parent = main
-    
-    Instance.new("UICorner", header).CornerRadius = UDim.new(0, 15)
-    
-    local headerBottom = Instance.new("Frame")
-    headerBottom.Size = UDim2.new(1, 0, 0, 15)
-    headerBottom.Position = UDim2.new(0, 0, 1, -15)
-    headerBottom.BackgroundColor3 = CONFIG.COR_FUNDO_2
-    headerBottom.BorderSizePixel = 0
-    headerBottom.Parent = header
-    
-    -- Avatar do jogador (usando imagem da web)
+    -- Avatar do jogador
     local avatar = Instance.new("ImageLabel")
     avatar.Size = UDim2.new(0, 40, 0, 40)
     avatar.Position = UDim2.new(0, 15, 0.5, -20)
@@ -1121,24 +1122,24 @@ local function CreateGUI()
     end)
     
     -- ═══════════════════════════════════════════════════════
-    -- CONTAINER DAS TABS (ESQUERDA)
+    -- CONTAINER DAS TABS (ESQUERDA) - ESTILO SHARK HUB
     -- ═══════════════════════════════════════════════════════
     local tabsContainer = Instance.new("Frame")
-    tabsContainer.Size = UDim2.new(0, 140, 1, -75)
+    tabsContainer.Size = UDim2.new(0, 180, 1, -75)
     tabsContainer.Position = UDim2.new(0, 10, 0, 65)
     tabsContainer.BackgroundTransparency = 1
     tabsContainer.Parent = main
     
     local tabsList = Instance.new("UIListLayout")
-    tabsList.Padding = UDim.new(0, 8)
+    tabsList.Padding = UDim.new(0, 5)
     tabsList.Parent = tabsContainer
     
     -- ═══════════════════════════════════════════════════════
     -- CONTAINER DO CONTEÚDO (DIREITA)
     -- ═══════════════════════════════════════════════════════
     local contentContainer = Instance.new("Frame")
-    contentContainer.Size = UDim2.new(1, -160, 1, -75)
-    contentContainer.Position = UDim2.new(0, 155, 0, 65)
+    contentContainer.Size = UDim2.new(1, -200, 1, -75)
+    contentContainer.Position = UDim2.new(0, 195, 0, 65)
     contentContainer.BackgroundTransparency = 1
     contentContainer.Parent = main
     
@@ -1147,33 +1148,33 @@ local function CreateGUI()
     -- ═══════════════════════════════════════════════════════
     local tabs = {
         {
-            Name = "Player", 
-            Icon = "https://cdn-icons-png.flaticon.com/512/1077/1077012.png",
+            Name = "Player",
+            Icon = "rbxassetid://3926305904",  -- Ícone de pessoa
             Emoji = "👤"
         },
         {
-            Name = "Troll", 
-            Icon = "https://cdn-icons-png.flaticon.com/512/2584/2584606.png",
+            Name = "Troll",
+            Icon = "rbxassetid://3926307971",  -- Ícone de raio
             Emoji = "😈"
         },
         {
-            Name = "Aimbot", 
-            Icon = "https://cdn-icons-png.flaticon.com/512/2583/2583780.png",
+            Name = "Aimbot",
+            Icon = "rbxassetid://3926305904",  -- Ícone de alvo
             Emoji = "🎯"
         },
         {
-            Name = "ESP", 
-            Icon = "https://cdn-icons-png.flaticon.com/512/159/159604.png",
+            Name = "ESP",
+            Icon = "rbxassetid://3926305904",  -- Ícone de olho
             Emoji = "👁️"
         },
         {
-            Name = "Visual", 
-            Icon = "https://cdn-icons-png.flaticon.com/512/2970/2970260.png",
+            Name = "Visual",
+            Icon = "rbxassetid://3926305904",  -- Ícone de estrela
             Emoji = "✨"
         },
         {
-            Name = "Config", 
-            Icon = "https://cdn-icons-png.flaticon.com/512/3524/3524659.png",
+            Name = "Config",
+            Icon = "rbxassetid://3926305904",  -- Ícone de engrenagem
             Emoji = "⚙️"
         }
     }
@@ -1482,7 +1483,7 @@ local function CreateGUI()
         return btn
     end
     
-    -- Criar seção (título de divisão) - VERSÃO MELHORADA
+    -- Criar seção (título de divisão)
     local function CreateSection(text, parent)
         local section = Instance.new("Frame")
         section.Size = UDim2.new(1, 0, 0, 32)
@@ -1521,15 +1522,15 @@ local function CreateGUI()
     end
     
     -- ═══════════════════════════════════════════════════════
-    -- LISTA DE JOGADORES (APENAS ABA TROLL) - POSIÇÃO CORRIGIDA
+    -- LISTA DE JOGADORES (APENAS ABA TROLL)
     -- ═══════════════════════════════════════════════════════
     local playerList = Instance.new("Frame")
     playerList.Size = UDim2.new(0, 170, 1, -75)
-    playerList.Position = UDim2.new(0, 155, 0, 65)
+    playerList.Position = UDim2.new(0, 195, 0, 65)
     playerList.BackgroundColor3 = CONFIG.COR_FUNDO_2
     playerList.BorderSizePixel = 0
     playerList.Visible = false
-    playerList.ZIndex = 2  -- Garantir que fique acima
+    playerList.ZIndex = 2
     playerList.Parent = main
     
     Instance.new("UICorner", playerList).CornerRadius = UDim.new(0, 10)
@@ -1688,11 +1689,11 @@ local function CreateGUI()
     end)
     
     -- ═══════════════════════════════════════════════════════
-    -- CRIAR BOTÕES DAS TABS COM IMAGENS
+    -- CRIAR BOTÕES DAS TABS - ESTILO SHARK HUB
     -- ═══════════════════════════════════════════════════════
     for i, tab in ipairs(tabs) do
         local tabBtn = Instance.new("TextButton")
-        tabBtn.Size = UDim2.new(1, 0, 0, 52)
+        tabBtn.Size = UDim2.new(1, 0, 0, 42)
         tabBtn.BackgroundColor3 = CONFIG.COR_FUNDO_2
         tabBtn.Text = ""
         tabBtn.BorderSizePixel = 0
@@ -1707,38 +1708,34 @@ local function CreateGUI()
         tabStroke.Transparency = 0.5
         tabStroke.Parent = tabBtn
         
-        -- Container para o ícone (imagem da web)
+        -- Container para o ícone (imagem pequena)
         local iconContainer = Instance.new("Frame")
-        iconContainer.Size = UDim2.new(0, 32, 0, 32)
-        iconContainer.Position = UDim2.new(0.5, -16, 0, 6)
-        iconContainer.BackgroundColor3 = CONFIG.COR_FUNDO
-        iconContainer.BorderSizePixel = 0
+        iconContainer.Size = UDim2.new(0, 28, 0, 28)
+        iconContainer.Position = UDim2.new(0, 10, 0.5, -14)
+        iconContainer.BackgroundTransparency = 1
         iconContainer.Parent = tabBtn
         
-        Instance.new("UICorner", iconContainer).CornerRadius = UDim.new(0, 8)
-        
-        -- Ícone (imagem da web)
+        -- Ícone (ImageLabel com fallback para emoji)
         local tabIcon = Instance.new("ImageLabel")
-        tabIcon.Size = UDim2.new(0, 24, 0, 24)
-        tabIcon.Position = UDim2.new(0.5, -12, 0.5, -12)
+        tabIcon.Size = UDim2.new(1, 0, 1, 0)
         tabIcon.BackgroundTransparency = 1
         tabIcon.Image = tab.Icon
         tabIcon.ImageColor3 = CONFIG.COR_TEXTO_SEC
         tabIcon.ScaleType = Enum.ScaleType.Fit
         tabIcon.Parent = iconContainer
         
-        -- Fallback: se imagem não carregar, mostrar emoji
+        -- Fallback: emoji se imagem não carregar
         local emojiLabel = Instance.new("TextLabel")
         emojiLabel.Size = UDim2.new(1, 0, 1, 0)
         emojiLabel.BackgroundTransparency = 1
         emojiLabel.Text = tab.Emoji
         emojiLabel.TextColor3 = CONFIG.COR_TEXTO_SEC
-        emojiLabel.TextSize = 20
+        emojiLabel.TextSize = 18
         emojiLabel.Font = Enum.Font.GothamBold
         emojiLabel.Visible = false
         emojiLabel.Parent = iconContainer
         
-        -- Verificar se imagem carregou
+        -- Verificar se imagem carregou (usar emoji como fallback)
         task.spawn(function()
             task.wait(1)
             if tabIcon.Image == tab.Icon and tabIcon.ImageRectSize == Vector2.new(0, 0) then
@@ -1747,15 +1744,16 @@ local function CreateGUI()
             end
         end)
         
-        -- Nome da tab
+        -- Nome da tab ao lado do ícone
         local tabName = Instance.new("TextLabel")
-        tabName.Size = UDim2.new(1, 0, 0, 14)
-        tabName.Position = UDim2.new(0, 0, 0, 36)
+        tabName.Size = UDim2.new(1, -48, 1, 0)
+        tabName.Position = UDim2.new(0, 45, 0, 0)
         tabName.BackgroundTransparency = 1
         tabName.Text = tab.Name
         tabName.TextColor3 = CONFIG.COR_TEXTO_SEC
-        tabName.TextSize = 10
+        tabName.TextSize = 13
         tabName.Font = Enum.Font.Gotham
+        tabName.TextXAlignment = Enum.TextXAlignment.Left
         tabName.Parent = tabBtn
         
         -- Frame de conteúdo da tab
@@ -1786,12 +1784,12 @@ local function CreateGUI()
             -- Mostrar lista de jogadores apenas na aba Troll
             if tab.Name == "Troll" then
                 playerList.Visible = true
-                contentContainer.Size = UDim2.new(1, -340, 1, -75)
-                contentContainer.Position = UDim2.new(0, 330, 0, 65)
+                contentContainer.Size = UDim2.new(1, -380, 1, -75)
+                contentContainer.Position = UDim2.new(0, 370, 0, 65)
             else
                 playerList.Visible = false
-                contentContainer.Size = UDim2.new(1, -160, 1, -75)
-                contentContainer.Position = UDim2.new(0, 155, 0, 65)
+                contentContainer.Size = UDim2.new(1, -200, 1, -75)
+                contentContainer.Position = UDim2.new(0, 195, 0, 65)
             end
             
             -- Resetar todas as tabs
@@ -1825,17 +1823,28 @@ local function CreateGUI()
             -- Ativar tab clicada
             Tween(tabBtn, {BackgroundColor3 = CONFIG.COR_PRINCIPAL}, 0.2)
             Tween(tabStroke, {Color = CONFIG.COR_TEXTO}, 0.2)
-            Tween(iconContainer, {BackgroundColor3 = CONFIG.COR_PRINCIPAL}, 0.2)
             Tween(tabIcon, {ImageColor3 = CONFIG.COR_TEXTO}, 0.2)
             Tween(emojiLabel, {TextColor3 = CONFIG.COR_TEXTO}, 0.2)
             Tween(tabName, {TextColor3 = CONFIG.COR_TEXTO}, 0.2)
+        end)
+        
+        -- Animações de hover
+        tabBtn.MouseEnter:Connect(function()
+            if currentTab ~= tab.Name then
+                Tween(tabBtn, {BackgroundColor3 = CONFIG.COR_FUNDO_3}, 0.2)
+            end
+        end)
+        
+        tabBtn.MouseLeave:Connect(function()
+            if currentTab ~= tab.Name then
+                Tween(tabBtn, {BackgroundColor3 = CONFIG.COR_FUNDO_2}, 0.2)
+            end
         end)
         
         -- Primeira tab ativa por padrão
         if i == 1 then
             tabBtn.BackgroundColor3 = CONFIG.COR_PRINCIPAL
             tabStroke.Color = CONFIG.COR_TEXTO
-            iconContainer.BackgroundColor3 = CONFIG.COR_PRINCIPAL
             tabIcon.ImageColor3 = CONFIG.COR_TEXTO
             emojiLabel.TextColor3 = CONFIG.COR_TEXTO
             tabName.TextColor3 = CONFIG.COR_TEXTO
@@ -1843,7 +1852,6 @@ local function CreateGUI()
         end
     end
     
-    -- IMPORTANTE: Aguardar 0.1s antes de criar o conteúdo para garantir que as tabs existam
     task.wait(0.1)
     
     -- ═══════════════════════════════════════════════════════
@@ -2255,8 +2263,9 @@ print("╔═══════════════════════�
 print("║     SHAKA HUB v3.0 PREMIUM - CARREGADO!       ║")
 print("║                                                ║")
 print("║  ⚡ Pressione INSERT para abrir o menu        ║")
-print("║  🎮 Arraste o menu ou botão flutuante         ║")
+print("║  🎮 Arraste pela BARRA SUPERIOR apenas        ║")
 print("║  🌈 Ative Rainbow Mode nas configurações      ║")
+print("║  🖼️  Tabs com ícones estilo Shark Hub         ║")
 print("║                                                ║")
 print("║  👑 Desenvolvido por 2M | 2025                ║")
 print("╚════════════════════════════════════════════════╝")
@@ -2268,7 +2277,8 @@ print("   • ESP completo com todas opções")
 print("   • Aimbot com FOV Circle")
 print("   • Sistema de Trollagem")
 print("   • Fullbright e Controles Visuais")
-print("   • Menu arrastável e responsivo")
+print("   • Menu arrastável APENAS pela barra superior")
+print("   • Tabs laterais com ícones + texto")
 print("")
 print("🎨 Tema: #A903FC (Roxo Premium) + #000000 (Preto)")
 print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
