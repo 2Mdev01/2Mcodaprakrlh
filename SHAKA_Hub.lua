@@ -2028,7 +2028,6 @@ local function CreateGUI()
         Connections.Follow:Disconnect()
         Connections.Follow = nil
         
-        -- Parar animação de dança (se estiver tocando)
         if DanceTrack then
             DanceTrack:Stop()
             DanceTrack = nil
@@ -2039,16 +2038,16 @@ local function CreateGUI()
         local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
         local animator = humanoid and humanoid:FindFirstChildOfClass("Animator")
 
-        -- Tocar animação de dança
+        -- Animação de dança
         if animator then
             local animation = Instance.new("Animation")
-            animation.AnimationId = "rbxassetid://3189773368" -- 💃 Exemplo: "Dançar"
+            animation.AnimationId = "rbxassetid://3189773368" -- exemplo: dança genérica
             DanceTrack = animator:LoadAnimation(animation)
             DanceTrack:Play()
             DanceTrack.Looped = true
         end
 
-        -- "Grudar" nas costas do jogador alvo
+        -- "Grudar" nas costas do jogador alvo (mesma rotação, costas coladas)
         Connections.Follow = RunService.Heartbeat:Connect(function()
             pcall(function()
                 local myChar = LocalPlayer.Character
@@ -2059,16 +2058,20 @@ local function CreateGUI()
                 local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
                 if not myRoot or not targetRoot then return end
 
-                -- Calcula posição logo atrás do jogador alvo
-                local offset = Vector3.new(0, 0, 2) -- distância das costas
-                local behindPos = targetRoot.CFrame * CFrame.new(offset)
+                -- Calcula posição atrás do jogador (costas coladas)
+                local offset = Vector3.new(0, 0, 2) -- distância nas costas
+                -- O CFrame * CFrame.new(0,0,2) coloca você atrás do jogador
+                local behindCF = targetRoot.CFrame * CFrame.new(0, 0, offset.Z)
 
-                -- Teleporta ou “cola” o personagem atrás
-                myRoot.CFrame = CFrame.new(behindPos.Position, targetRoot.Position)
+                -- Faz você olhar na mesma direção (costas com costas)
+                local sameFacingCF = CFrame.new(behindCF.Position) * CFrame.Angles(0, targetRoot.Orientation.Y * math.pi/180, 0)
+
+                -- Aplica posição e rotação
+                myRoot.CFrame = sameFacingCF
             end)
         end)
 
-        Notify("Grudado em " .. SelectedPlayer.Name, CONFIG.COR_SUCESSO, "💃")
+        Notify("Costas coladas em " .. SelectedPlayer.Name, CONFIG.COR_SUCESSO, "💃")
     end
 end, tabFrames["Troll"], "🚶")
     
