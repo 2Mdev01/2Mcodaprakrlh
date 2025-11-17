@@ -1,4 +1,4 @@
--- Advanced Security MOD MENU
+-- Advanced Security MOD MENU - CORRIGIDO
 -- APENAS para pentest autorizado em servidores próprios
 
 local AdvancedSecurityMenu = {}
@@ -11,8 +11,8 @@ local HttpService = game:GetService("HttpService")
 
 -- Configurações
 AdvancedSecurityMenu.Config = {
-    Keybind = Enum.KeyCode.F5, -- Tecla para abrir/fechar
-    Theme = "Dark", -- Dark, Light, Blue, Green
+    Keybind = Enum.KeyCode.F5,
+    Theme = "Dark",
     AutoStart = true
 }
 
@@ -54,17 +54,6 @@ local Themes = {
         Success = Color3.fromRGB(76, 175, 80),
         Warning = Color3.fromRGB(255, 152, 0),
         Error = Color3.fromRGB(244, 67, 54)
-    },
-    Light = {
-        Background = Color3.fromRGB(245, 245, 245),
-        Header = Color3.fromRGB(225, 225, 225),
-        Tab = Color3.fromRGB(235, 235, 235),
-        TabActive = Color3.fromRGB(0, 120, 215),
-        Text = Color3.fromRGB(0, 0, 0),
-        TextSecondary = Color3.fromRGB(100, 100, 100),
-        Success = Color3.fromRGB(56, 142, 60),
-        Warning = Color3.fromRGB(245, 124, 0),
-        Error = Color3.fromRGB(211, 47, 47)
     }
 }
 
@@ -107,64 +96,92 @@ function AdvancedSecurityMenu:AddLog(category, level, message, data)
     end
     
     -- Atualizar UI se estiver aberta
-    if self.IsMenuOpen then
+    if self.IsMenuOpen and self.UpdateLogDisplay then
         self:UpdateLogDisplay(category)
     end
 end
 
--- Sistema de instrumentação de RemoteEvents
+-- Sistema de instrumentação de RemoteEvents CORRIGIDO
 function AdvancedSecurityMenu:InstrumentRemoteEvents()
-    local function instrumentRemote(remote)
+    local function safeInstrumentRemote(remote)
         if self.MonitoredRemotes[remote] then return end
         
-        if remote:IsA("RemoteEvent") then
-            local originalFire = remote.FireServer
-            remote.FireServer = function(self, ...)
-                local args = {...}
-                local success, result = pcall(originalFire, self, unpack(args))
-                
-                self:AddLog("RemoteEvents", "INFO", 
-                    string.format("📡 %s fired", remote.Name), {
-                    ArgsCount = #args,
-                    Success = success,
-                    ArgsPreview = self:PreviewArgs(args)
-                })
-                
-                return result
+        local success, result = pcall(function()
+            if remote:IsA("RemoteEvent") then
+                local originalFire = remote.FireServer
+                if originalFire then
+                    remote.FireServer = function(self, ...)
+                        local args = {...}
+                        local fireSuccess, fireResult = pcall(originalFire, self, unpack(args))
+                        
+                        self:AddLog("RemoteEvents", "INFO", 
+                            string.format("📡 %s fired", remote.Name), {
+                            ArgsCount = #args,
+                            Success = fireSuccess,
+                            ArgsPreview = self:PreviewArgs(args)
+                        })
+                        
+                        return fireResult
+                    end
+                end
+            elseif remote:IsA("RemoteFunction") then
+                local originalInvoke = remote.InvokeServer
+                if originalInvoke then
+                    remote.InvokeServer = function(self, ...)
+                        local args = {...}
+                        local invokeSuccess, invokeResult = pcall(originalInvoke, self, unpack(args))
+                        
+                        self:AddLog("RemoteEvents", "INFO", 
+                            string.format("🔧 %s invoked", remote.Name), {
+                            ArgsCount = #args,
+                            Success = invokeSuccess,
+                            ResultPreview = tostring(invokeResult)
+                        })
+                        
+                        return invokeResult
+                    end
+                end
             end
-        elseif remote:IsA("RemoteFunction") then
-            local originalInvoke = remote.InvokeServer
-            remote.InvokeServer = function(self, ...)
-                local args = {...}
-                local success, result = pcall(originalInvoke, self, unpack(args))
-                
-                self:AddLog("RemoteEvents", "INFO", 
-                    string.format("🔧 %s invoked", remote.Name), {
-                    ArgsCount = #args,
-                    Success = success,
-                    ResultPreview = tostring(result)
-                })
-                
-                return result
-            end
-        end
+            
+            self.MonitoredRemotes[remote] = true
+            return true
+        end)
         
-        self.MonitoredRemotes[remote] = true
+        if not success then
+            self:AddLog("Errors", "ERROR", "Failed to instrument remote", {
+                RemoteName = remote.Name,
+                Error = result
+            })
+        end
     end
 
-    -- Instrumentar existentes
-    for _, remote in ipairs(ReplicatedStorage:GetDescendants()) do
+    -- Instrumentar existentes com proteção
+    local function safeGetDescendants(parent)
+        local success, descendants = pcall(function()
+            return parent:GetDescendants()
+        end)
+        return success and descendants or {}
+    end
+
+    -- Monitorar ReplicatedStorage
+    for _, remote in ipairs(safeGetDescendants(ReplicatedStorage)) do
         if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
-            pcall(instrumentRemote, remote)
+            task.spawn(safeInstrumentRemote, remote)
         end
     end
 
-    -- Monitorar novos
-    ReplicatedStorage.DescendantAdded:Connect(function(descendant)
-        if descendant:IsA("RemoteEvent") or descendant:IsA("RemoteFunction") then
-            task.wait(0.1)
-            pcall(instrumentRemote, descendant)
-        end
+    -- Monitorar novos com proteção
+    local function safeDescendantAdded(descendant)
+        local success = pcall(function()
+            if descendant:IsA("RemoteEvent") or descendant:IsA("RemoteFunction") then
+                task.wait(0.2)
+                safeInstrumentRemote(descendant)
+            end
+        end)
+    end
+
+    pcall(function()
+        ReplicatedStorage.DescendantAdded:Connect(safeDescendantAdded)
     end)
 end
 
@@ -172,86 +189,112 @@ end
 function AdvancedSecurityMenu:PreviewArgs(args)
     local preview = {}
     for i, arg in ipairs(args) do
-        if type(arg) == "string" then
+        local argType = type(arg)
+        if argType == "string" then
             preview[i] = #arg > 20 and string.sub(arg, 1, 20).."..." or arg
-        elseif type(arg) == "number" then
+        elseif argType == "number" then
             preview[i] = tostring(arg)
-        elseif type(arg) == "boolean" then
+        elseif argType == "boolean" then
             preview[i] = tostring(arg)
         else
-            preview[i] = type(arg)
+            preview[i] = argType
         end
     end
     return preview
 end
 
--- Monitoramento de Character
+-- Monitoramento de Character CORRIGIDO
 function AdvancedSecurityMenu:MonitorCharacter()
     local lastPosition = nil
     local lastHealth = nil
     
     RunService.Heartbeat:Connect(function()
-        local player = Players.LocalPlayer
-        if not player or not player.Character then return end
-        
-        local character = player.Character
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
-        local rootPart = character:FindFirstChild("HumanoidRootPart")
-        
-        if rootPart then
-            local currentPosition = rootPart.Position
-            if lastPosition and (currentPosition - lastPosition).Magnitude > 5 then
-                self:AddLog("Character", "INFO", "🎯 Character moved", {
-                    Distance = (currentPosition - lastPosition).Magnitude,
-                    Position = currentPosition,
-                    Velocity = rootPart.Velocity.Magnitude
-                })
+        local success = pcall(function()
+            local player = Players.LocalPlayer
+            if not player or not player.Character then return end
+            
+            local character = player.Character
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            local rootPart = character:FindFirstChild("HumanoidRootPart")
+            
+            if rootPart then
+                local currentPosition = rootPart.Position
+                if lastPosition then
+                    local distance = (currentPosition - lastPosition).Magnitude
+                    if distance > 2 then
+                        self:AddLog("Character", "INFO", "🎯 Character moved", {
+                            Distance = math.floor(distance * 100) / 100,
+                            Position = {
+                                X = math.floor(currentPosition.X * 100) / 100,
+                                Y = math.floor(currentPosition.Y * 100) / 100,
+                                Z = math.floor(currentPosition.Z * 100) / 100
+                            },
+                            Velocity = math.floor(rootPart.Velocity.Magnitude * 100) / 100
+                        })
+                    end
+                end
+                lastPosition = currentPosition
             end
-            lastPosition = currentPosition
-        end
-        
-        if humanoid then
-            local currentHealth = humanoid.Health
-            if lastHealth and math.abs(currentHealth - lastHealth) > 5 then
-                self:AddLog("Character", "WARNING", "❤️ Health changed", {
-                    OldHealth = lastHealth,
-                    NewHealth = currentHealth,
-                    Difference = currentHealth - lastHealth
-                })
+            
+            if humanoid then
+                local currentHealth = humanoid.Health
+                if lastHealth and math.abs(currentHealth - lastHealth) > 5 then
+                    self:AddLog("Character", "WARNING", "❤️ Health changed", {
+                        OldHealth = math.floor(lastHealth * 100) / 100,
+                        NewHealth = math.floor(currentHealth * 100) / 100,
+                        Difference = math.floor((currentHealth - lastHealth) * 100) / 100
+                    })
+                end
+                lastHealth = currentHealth
             end
-            lastHealth = currentHealth
+        end)
+        
+        if not success then
+            -- Erro silencioso para evitar spam
         end
     end)
 end
 
--- Monitoramento de Inputs
+-- Monitoramento de Inputs CORRIGIDO
 function AdvancedSecurityMenu:MonitorInputs()
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if not gameProcessed and input.UserInputType == Enum.UserInputType.Keyboard then
-            self:AddLog("Inputs", "DEBUG", "⌨️ Key pressed", {
-                Key = input.KeyCode.Name,
-                KeyCode = input.KeyCode.Value
-            })
-        end
-    end)
-end
-
--- Monitoramento de Network
-function AdvancedSecurityMenu:MonitorNetwork()
-    Players.PlayerAdded:Connect(function(player)
-        self:AddLog("Network", "INFO", "👤 Player joined", {
-            PlayerName = player.Name,
-            UserId = player.UserId,
-            AccountAge = player.AccountAge
-        })
+    local success = pcall(function()
+        UserInputService.InputBegan:Connect(function(input, gameProcessed)
+            if not gameProcessed and input.UserInputType == Enum.UserInputType.Keyboard then
+                self:AddLog("Inputs", "DEBUG", "⌨️ Key pressed", {
+                    Key = input.KeyCode.Name,
+                    KeyCode = input.KeyCode.Value
+                })
+            end
+        end)
     end)
     
-    Players.PlayerRemoving:Connect(function(player)
-        self:AddLog("Network", "INFO", "👋 Player left", {
-            PlayerName = player.Name,
-            UserId = player.UserId
-        })
+    if not success then
+        self:AddLog("Errors", "ERROR", "Failed to monitor inputs")
+    end
+end
+
+-- Monitoramento de Network CORRIGIDO
+function AdvancedSecurityMenu:MonitorNetwork()
+    local success = pcall(function()
+        Players.PlayerAdded:Connect(function(player)
+            self:AddLog("Network", "INFO", "👤 Player joined", {
+                PlayerName = player.Name,
+                UserId = player.UserId,
+                AccountAge = player.AccountAge
+            })
+        end)
+        
+        Players.PlayerRemoving:Connect(function(player)
+            self:AddLog("Network", "INFO", "👋 Player left", {
+                PlayerName = player.Name,
+                UserId = player.UserId
+            })
+        end)
     end)
+    
+    if not success then
+        self:AddLog("Errors", "ERROR", "Failed to monitor network")
+    end
 end
 
 -- Sistema de Triggers
@@ -262,11 +305,14 @@ function AdvancedSecurityMenu:AddTrigger(name, condition, action)
         Cooldown = 0,
         LastTriggered = 0
     }
+    self:AddLog("Triggers", "INFO", "✅ Trigger added: " .. name)
 end
 
--- Criar a Interface do MOD MENU
+-- Criar a Interface do MOD MENU CORRIGIDA
 function AdvancedSecurityMenu:CreateMenu()
-    if self.ScreenGui then self.ScreenGui:Destroy() end
+    if self.ScreenGui then 
+        pcall(function() self.ScreenGui:Destroy() end) 
+    end
     
     self.ScreenGui = Instance.new("ScreenGui")
     if gethui then
@@ -321,7 +367,7 @@ function AdvancedSecurityMenu:CreateMenu()
     TabContainer.BorderSizePixel = 0
     TabContainer.Parent = MainFrame
     
-    local Tabs = {"Dashboard", "Remote Events", "Character", "Network", "Inputs", "Triggers", "Logs"}
+    local Tabs = {"Dashboard", "RemoteEvents", "Character", "Network", "Inputs", "Triggers", "Logs"}
     local TabButtons = {}
     
     for i, tabName in ipairs(Tabs) do
@@ -333,7 +379,7 @@ function AdvancedSecurityMenu:CreateMenu()
         TabButton.Text = tabName
         TabButton.TextColor3 = CurrentTheme.TextSecondary
         TabButton.Font = Enum.Font.Gotham
-        TabButton.TextSize = 12
+        TabButton.TextSize = 11
         TabButton.Parent = TabContainer
         
         TabButton.MouseButton1Click:Connect(function()
@@ -367,7 +413,12 @@ function AdvancedSecurityMenu:CreateMenu()
         Frame.BorderSizePixel = 0
         Frame.ScrollBarThickness = 6
         Frame.Visible = false
+        Frame.AutomaticCanvasSize = Enum.AutomaticSize.Y
         Frame.Parent = ContentFrame
+        
+        local UIListLayout = Instance.new("UIListLayout")
+        UIListLayout.Padding = UDim.new(0, 5)
+        UIListLayout.Parent = Frame
         
         self.ContentFrames[tabName] = Frame
     end
@@ -379,9 +430,12 @@ function AdvancedSecurityMenu:CreateMenu()
     
     self.MainFrame = MainFrame
     self.TabButtons = TabButtons
+    
+    -- Criar conteúdo das tabs
+    self:CreateTabContent()
 end
 
--- Criar conteúdo das tabs
+-- Criar conteúdo das tabs CORRIGIDO
 function AdvancedSecurityMenu:CreateTabContent()
     -- Dashboard
     self:CreateDashboardTab()
@@ -389,7 +443,7 @@ function AdvancedSecurityMenu:CreateTabContent()
     -- Remote Events
     self:CreateRemoteEventsTab()
     
-    -- Character
+    -- Character Tab
     self:CreateCharacterTab()
     
     -- Network
@@ -408,36 +462,74 @@ end
 function AdvancedSecurityMenu:CreateDashboardTab()
     local frame = self.ContentFrames["Dashboard"]
     
-    -- Estatísticas
-    local StatsLabel = Instance.new("TextLabel")
-    StatsLabel.Size = UDim2.new(1, -20, 0, 30)
-    StatsLabel.Position = UDim2.new(0, 10, 0, 10)
-    StatsLabel.BackgroundTransparency = 1
-    StatsLabel.Text = "📊 REAL-TIME STATISTICS"
-    StatsLabel.TextColor3 = CurrentTheme.Text
-    StatsLabel.TextXAlignment = Enum.TextXAlignment.Left
-    StatsLabel.Font = Enum.Font.GothamBold
-    StatsLabel.TextSize = 16
-    StatsLabel.Parent = frame
+    -- Estatísticas em tempo real
+    self.StatsLabels = {}
+    
+    local stats = {
+        {"📊 TOTAL EVENTS", "totalEvents"},
+        {"📡 REMOTE EVENTS", "remoteEvents"},
+        {"🎯 CHARACTER EVENTS", "characterEvents"},
+        {"🌐 NETWORK EVENTS", "networkEvents"},
+        {"⌨️ INPUTS", "inputs"},
+        {"🚨 TRIGGERS", "triggers"},
+        {"❌ ERRORS", "errors"}
+    }
+    
+    for i, stat in ipairs(stats) do
+        local statFrame = Instance.new("Frame")
+        statFrame.Size = UDim2.new(1, -20, 0, 30)
+        statFrame.Position = UDim2.new(0, 10, 0, 10 + (i-1)*35)
+        statFrame.BackgroundColor3 = CurrentTheme.Header
+        statFrame.BorderSizePixel = 0
+        statFrame.Parent = frame
+        
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(0.6, 0, 1, 0)
+        label.Position = UDim2.new(0, 10, 0, 0)
+        label.BackgroundTransparency = 1
+        label.Text = stat[1]
+        label.TextColor3 = CurrentTheme.Text
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Font = Enum.Font.Gotham
+        label.TextSize = 12
+        label.Parent = statFrame
+        
+        local value = Instance.new("TextLabel")
+        value.Size = UDim2.new(0.3, 0, 1, 0)
+        value.Position = UDim2.new(0.7, 0, 0, 0)
+        value.BackgroundTransparency = 1
+        value.Text = "0"
+        value.TextColor3 = CurrentTheme.Success
+        value.TextXAlignment = Enum.TextXAlignment.Right
+        value.Font = Enum.Font.GothamBold
+        value.TextSize = 14
+        value.Parent = statFrame
+        
+        self.StatsLabels[stat[2]] = value
+    end
     
     -- Controles
-    local Controls = Instance.new("Frame")
-    Controls.Size = UDim2.new(1, -20, 0, 100)
-    Controls.Position = UDim2.new(0, 10, 0, 200)
-    Controls.BackgroundColor3 = CurrentTheme.Header
-    Controls.BorderSizePixel = 0
-    Controls.Parent = frame
+    local ControlsLabel = Instance.new("TextLabel")
+    ControlsLabel.Size = UDim2.new(1, -20, 0, 20)
+    ControlsLabel.Position = UDim2.new(0, 10, 0, 300)
+    ControlsLabel.BackgroundTransparency = 1
+    ControlsLabel.Text = "🛠️ CONTROLS"
+    ControlsLabel.TextColor3 = CurrentTheme.Text
+    ControlsLabel.TextXAlignment = Enum.TextXAlignment.Left
+    ControlsLabel.Font = Enum.Font.GothamBold
+    ControlsLabel.TextSize = 14
+    ControlsLabel.Parent = frame
     
     local ClearLogsBtn = Instance.new("TextButton")
     ClearLogsBtn.Size = UDim2.new(0, 120, 0, 30)
-    ClearLogsBtn.Position = UDim2.new(0, 10, 0, 10)
+    ClearLogsBtn.Position = UDim2.new(0, 10, 0, 330)
     ClearLogsBtn.BackgroundColor3 = CurrentTheme.Warning
     ClearLogsBtn.BorderSizePixel = 0
     ClearLogsBtn.Text = "🧹 Clear Logs"
     ClearLogsBtn.TextColor3 = CurrentTheme.Text
     ClearLogsBtn.Font = Enum.Font.Gotham
     ClearLogsBtn.TextSize = 12
-    ClearLogsBtn.Parent = Controls
+    ClearLogsBtn.Parent = frame
     
     ClearLogsBtn.MouseButton1Click:Connect(function()
         self:ClearAllLogs()
@@ -445,11 +537,44 @@ function AdvancedSecurityMenu:CreateDashboardTab()
 end
 
 function AdvancedSecurityMenu:CreateRemoteEventsTab()
-    local frame = self.ContentFrames["Remote Events"]
-    -- Conteúdo específico para Remote Events
+    local frame = self.ContentFrames["RemoteEvents"]
+    -- Conteúdo será preenchido dinamicamente
 end
 
--- Implementar outras tabs similares...
+function AdvancedSecurityMenu:CreateCharacterTab()
+    local frame = self.ContentFrames["Character"]
+    -- Conteúdo será preenchido dinamicamente
+end
+
+function AdvancedSecurityMenu:CreateNetworkTab()
+    local frame = self.ContentFrames["Network"]
+    -- Conteúdo será preenchido dinamicamente
+end
+
+function AdvancedSecurityMenu:CreateInputsTab()
+    local frame = self.ContentFrames["Inputs"]
+    -- Conteúdo será preenchido dinamicamente
+end
+
+function AdvancedSecurityMenu:CreateTriggersTab()
+    local frame = self.ContentFrames["Triggers"]
+    
+    local Title = Instance.new("TextLabel")
+    Title.Size = UDim2.new(1, -20, 0, 30)
+    Title.Position = UDim2.new(0, 10, 0, 10)
+    Title.BackgroundTransparency = 1
+    Title.Text = "🚨 ACTIVE TRIGGERS"
+    Title.TextColor3 = CurrentTheme.Text
+    Title.TextXAlignment = Enum.TextXAlignment.Left
+    Title.Font = Enum.Font.GothamBold
+    Title.TextSize = 16
+    Title.Parent = frame
+end
+
+function AdvancedSecurityMenu:CreateLogsTab()
+    local frame = self.ContentFrames["Logs"]
+    -- Conteúdo será preenchido dinamicamente
+end
 
 function AdvancedSecurityMenu:SwitchTab(tabName)
     self.CurrentTab = tabName
@@ -458,27 +583,117 @@ function AdvancedSecurityMenu:SwitchTab(tabName)
         frame.Visible = (name == tabName)
     end
     
+    if self.TabButtons[tabName] then
+        for _, btn in pairs(self.TabButtons) do
+            btn.BackgroundColor3 = CurrentTheme.Tab
+            btn.TextColor3 = CurrentTheme.TextSecondary
+        end
+        self.TabButtons[tabName].BackgroundColor3 = CurrentTheme.TabActive
+        self.TabButtons[tabName].TextColor3 = CurrentTheme.Text
+    end
+    
     self:UpdateTabContent(tabName)
 end
 
 function AdvancedSecurityMenu:UpdateTabContent(tabName)
     if tabName == "Dashboard" then
         self:UpdateDashboard()
-    elseif tabName == "Remote Events" then
-        self:UpdateRemoteEvents()
-    -- Atualizar outras tabs...
+    elseif tabName == "Logs" then
+        self:UpdateLogsTab()
     end
 end
 
 function AdvancedSecurityMenu:UpdateDashboard()
-    local frame = self.ContentFrames["Dashboard"]
-    -- Atualizar estatísticas em tempo real
+    if not self.StatsLabels then return end
+    
+    for statName, label in pairs(self.StatsLabels) do
+        if self.Statistics[statName] then
+            label.Text = tostring(self.Statistics[statName])
+        end
+    end
+end
+
+function AdvancedSecurityMenu:UpdateLogsTab()
+    local frame = self.ContentFrames["Logs"]
+    if not frame then return end
+    
+    -- Limpar logs antigos
+    for _, child in ipairs(frame:GetChildren()) do
+        if child:IsA("Frame") then
+            child:Destroy()
+        end
+    end
+    
+    -- Mostrar últimos 20 logs
+    local recentLogs = {}
+    for i = math.max(1, #self.Logs.All - 19), #self.Logs.All do
+        table.insert(recentLogs, self.Logs.All[i])
+    end
+    
+    for i, log in ipairs(recentLogs) do
+        local logFrame = Instance.new("Frame")
+        logFrame.Size = UDim2.new(1, -20, 0, 40)
+        logFrame.Position = UDim2.new(0, 10, 0, 10 + (i-1)*45)
+        logFrame.BackgroundColor3 = CurrentTheme.Header
+        logFrame.BorderSizePixel = 0
+        logFrame.Parent = frame
+        
+        local timeLabel = Instance.new("TextLabel")
+        timeLabel.Size = UDim2.new(0, 60, 0, 15)
+        timeLabel.Position = UDim2.new(0, 5, 0, 3)
+        timeLabel.BackgroundTransparency = 1
+        timeLabel.Text = log.TimeFormatted
+        timeLabel.TextColor3 = CurrentTheme.TextSecondary
+        timeLabel.TextXAlignment = Enum.TextXAlignment.Left
+        timeLabel.Font = Enum.Font.Gotham
+        timeLabel.TextSize = 10
+        timeLabel.Parent = logFrame
+        
+        local categoryLabel = Instance.new("TextLabel")
+        categoryLabel.Size = UDim2.new(0, 100, 0, 15)
+        categoryLabel.Position = UDim2.new(0, 70, 0, 3)
+        categoryLabel.BackgroundTransparency = 1
+        categoryLabel.Text = "[" .. log.Category .. "]"
+        categoryLabel.TextColor3 = CurrentTheme.TextSecondary
+        categoryLabel.TextXAlignment = Enum.TextXAlignment.Left
+        categoryLabel.Font = Enum.Font.Gotham
+        categoryLabel.TextSize = 10
+        categoryLabel.Parent = logFrame
+        
+        local messageLabel = Instance.new("TextLabel")
+        messageLabel.Size = UDim2.new(1, -10, 0, 20)
+        messageLabel.Position = UDim2.new(0, 5, 0, 20)
+        messageLabel.BackgroundTransparency = 1
+        messageLabel.Text = log.Message
+        messageLabel.TextColor3 = CurrentTheme.Text
+        messageLabel.TextXAlignment = Enum.TextXAlignment.Left
+        messageLabel.Font = Enum.Font.Gotham
+        messageLabel.TextSize = 12
+        messageLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        messageLabel.Parent = logFrame
+    end
 end
 
 function AdvancedSecurityMenu:UpdateLogDisplay(category)
-    if self.CurrentTab == "Logs" or self.CurrentTab == category then
-        self:UpdateTabContent(self.CurrentTab)
+    if self.IsMenuOpen then
+        self:UpdateDashboard()
+        if self.CurrentTab == "Logs" or self.CurrentTab == category then
+            self:UpdateTabContent(self.CurrentTab)
+        end
     end
+end
+
+function AdvancedSecurityMenu:ClearAllLogs()
+    for categoryName, logTable in pairs(self.Logs) do
+        self.Logs[categoryName] = {}
+    end
+    
+    for statName, _ in pairs(self.Statistics) do
+        self.Statistics[statName] = 0
+    end
+    
+    self:AddLog("System", "INFO", "All logs cleared")
+    self:UpdateTabContent(self.CurrentTab)
 end
 
 -- Controle do menu
@@ -500,34 +715,46 @@ function AdvancedSecurityMenu:SetupKeybind()
     end)
 end
 
--- Inicialização
+-- Inicialização CORRIGIDA
 function AdvancedSecurityMenu:Init()
-    self:CreateMenu()
-    self:CreateTabContent()
-    self:SetupKeybind()
+    local success, err = pcall(function()
+        self:CreateMenu()
+        self:SetupKeybind()
+        
+        -- Iniciar monitoramentos
+        self:InstrumentRemoteEvents()
+        self:MonitorCharacter()
+        self:MonitorInputs()
+        self:MonitorNetwork()
+        
+        -- Triggers padrão
+        self:AddTrigger("Fast Movement", 
+            function(data)
+                return data.Category == "Character" and data.Data.Distance and data.Data.Distance > 50
+            end,
+            function(data)
+                self:AddLog("Triggers", "WARNING", "🚨 FAST MOVEMENT DETECTED!", data.Data)
+            end
+        )
+        
+        self:AddLog("System", "SUCCESS", "🎮 MOD MENU Loaded! Press F5 to open")
+        return true
+    end)
     
-    -- Iniciar monitoramentos
-    self:InstrumentRemoteEvents()
-    self:MonitorCharacter()
-    self:MonitorInputs()
-    self:MonitorNetwork()
+    if not success then
+        warn("MOD MENU Initialization Error: " .. tostring(err))
+        return false
+    end
     
-    -- Triggers padrão
-    self:AddTrigger("Fast Movement", 
-        function(data)
-            return data.Category == "Character" and data.Data.Distance and data.Data.Distance > 50
-        end,
-        function(data)
-            self:AddLog("Triggers", "WARNING", "🚨 FAST MOVEMENT DETECTED!", data.Data)
-        end
-    )
-    
-    print("🎮 Advanced Security MOD MENU Loaded! Press F5 to open.")
+    return true
 end
 
 -- Iniciar automaticamente
 if AdvancedSecurityMenu.Config.AutoStart then
-    AdvancedSecurityMenu:Init()
+    task.spawn(function()
+        task.wait(2) -- Esperar o jogo carregar
+        AdvancedSecurityMenu:Init()
+    end)
 end
 
 -- Tornar global
