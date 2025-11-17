@@ -1,18 +1,21 @@
--- Advanced Security Testing Panel for Delta Executor
+-- Advanced Security Testing Panel - CORRIGIDO
 -- APENAS para pentest autorizado em servidores próprios
 
 local AdvancedSecurityPanel = {}
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
 
--- Configurações avançadas
+-- Configurações
 AdvancedSecurityPanel.Config = {
     AutoStart = true,
-    LogLevel = "DEBUG", -- DEBUG, INFO, WARN, ERROR
-    MaxLogs = 1000,
-    SaveLogsToFile = false,
-    CaptureScreenshots = false
+    LogLevel = "INFO",
+    MaxLogs = 500
 }
 
--- Armazenamento robusto
+-- Armazenamento
 AdvancedSecurityPanel.Logs = {}
 AdvancedSecurityPanel.Triggers = {}
 AdvancedSecurityPanel.MonitoredRemotes = {}
@@ -22,109 +25,135 @@ AdvancedSecurityPanel.Statistics = {
     errorsCount = 0
 }
 
--- Serviços
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local HttpService = game:GetService("HttpService")
-local TeleportService = game:GetService("TeleportService")
-
--- Player local
-local LocalPlayer = Players.LocalPlayer
-
--- Sistema de logging avançado
+-- Sistema de logging seguro
 function AdvancedSecurityPanel:Log(level, category, message, data)
-    local logEntry = {
-        Level = level,
-        Category = category,
-        Message = message,
-        Data = data or {},
-        Timestamp = os.time(),
-        Tick = tick(),
-        Player = LocalPlayer and LocalPlayer.Name or "Unknown",
-        PlaceId = game.PlaceId
-    }
-    
-    -- Filtro de nível de log
-    local levelPriority = {DEBUG = 1, INFO = 2, WARN = 3, ERROR = 4}
-    local configPriority = levelPriority[self.Config.LogLevel] or 2
-    local entryPriority = levelPriority[level] or 1
-    
-    if entryPriority >= configPriority then
+    local success, result = pcall(function()
+        local logEntry = {
+            Level = level,
+            Category = category,
+            Message = message,
+            Data = data or {},
+            Timestamp = os.time(),
+            Tick = tick()
+        }
+        
         table.insert(self.Logs, logEntry)
         self.Statistics.eventsLogged += 1
         
-        -- Manter limite máximo
         if #self.Logs > self.Config.MaxLogs then
             table.remove(self.Logs, 1)
         end
         
-        -- Atualizar UI se existir
-        self:UpdateLogDisplay(logEntry)
+        print(string.format("[%s] %s: %s", level, category, message))
         
-        -- Salvar em arquivo se configurado
-        if self.Config.SaveLogsToFile then
-            self:SaveLogToFile(logEntry)
-        end
+        return true
+    end)
+    
+    if not success then
+        warn("Logging error: " .. tostring(result))
     end
 end
 
--- Sistema de instrumentação seguro para RemoteEvents
+-- Instrumentação CORRIGIDA para RemoteEvents
 function AdvancedSecurityPanel:InstrumentRemoteSafe(remote)
-    if not remote or not remote:IsA("RemoteEvent") and not remote:IsA("RemoteFunction") then
-        return false
-    end
-    
-    if self.MonitoredRemotes[remote] then
-        return true -- Já instrumentado
-    end
-    
     local success, result = pcall(function()
+        if not remote then
+            return false, "Remote is nil"
+        end
+        
+        if not remote:IsA("RemoteEvent") and not remote:IsA("RemoteFunction") then
+            return false, "Not a RemoteEvent or RemoteFunction"
+        end
+        
+        if self.MonitoredRemotes[remote] then
+            return true, "Already monitored"
+        end
+        
+        -- Para RemoteEvent
         if remote:IsA("RemoteEvent") then
-            local originalFire = remote.FireServer
-            remote.FireServer = function(self, ...)
+            local originalFire
+            local isMetamethod = false
+            
+            -- Verificar se já tem metamethod
+            if getmetatable(remote) then
+                local success, value = pcall(function() return remote.FireServer end)
+                if success and type(value) == "function" then
+                    originalFire = value
+                end
+            end
+            
+            if not originalFire then
+                originalFire = remote.FireServer
+            end
+            
+            if not originalFire then
+                return false, "Could not get FireServer method"
+            end
+            
+            -- Criar nova função com proteção
+            local newFire = function(self, ...)
                 local args = {...}
                 local callSuccess, callResult = pcall(function()
                     return originalFire(self, unpack(args))
                 end)
                 
-                self:Log("DEBUG", "REMOTE_EVENT", string.format("Fired: %s", remote.Name), {
-                    remoteName = remote.Name,
-                    args = self:SanitizeArgs(args),
-                    success = callSuccess,
-                    result = callResult
+                AdvancedSecurityPanel:Log("DEBUG", "REMOTE_EVENT", 
+                    string.format("Fired: %s (Success: %s)", remote.Name, tostring(callSuccess)), {
+                    argsCount = #args,
+                    success = callSuccess
                 })
+                
+                if not callSuccess then
+                    AdvancedSecurityPanel:Log("ERROR", "REMOTE_EVENT", 
+                        string.format("Fire failed: %s", remote.Name), {
+                        error = callResult
+                    })
+                end
                 
                 return callResult
             end
+            
+            -- Aplicar de forma segura
+            pcall(function()
+                remote.FireServer = newFire
+            end)
+            
+        -- Para RemoteFunction  
         elseif remote:IsA("RemoteFunction") then
             local originalInvoke = remote.InvokeServer
-            remote.InvokeServer = function(self, ...)
+            
+            if not originalInvoke then
+                return false, "Could not get InvokeServer method"
+            end
+            
+            local newInvoke = function(self, ...)
                 local args = {...}
                 local callSuccess, callResult = pcall(function()
                     return originalInvoke(self, unpack(args))
                 end)
                 
-                self:Log("DEBUG", "REMOTE_FUNCTION", string.format("Invoked: %s", remote.Name), {
-                    remoteName = remote.Name,
-                    args = self:SanitizeArgs(args),
-                    success = callSuccess,
-                    result = callResult
+                AdvancedSecurityPanel:Log("DEBUG", "REMOTE_FUNCTION", 
+                    string.format("Invoked: %s (Success: %s)", remote.Name, tostring(callSuccess)), {
+                    argsCount = #args,
+                    success = callSuccess
                 })
                 
                 return callResult
             end
+            
+            pcall(function()
+                remote.InvokeServer = newInvoke
+            end)
         end
         
         self.MonitoredRemotes[remote] = true
-        return true
+        return true, "Success"
     end)
     
     if not success then
-        self:Log("ERROR", "INSTRUMENTATION", string.format("Failed to instrument remote: %s", remote.Name), {
-            error = result,
-            remotePath = self:GetFullPath(remote)
+        self:Log("ERROR", "INSTRUMENTATION", 
+            string.format("Failed to instrument remote: %s", tostring(remote)), {
+            error = result
         })
         return false
     end
@@ -132,340 +161,284 @@ function AdvancedSecurityPanel:InstrumentRemoteSafe(remote)
     return true
 end
 
--- Sanitizar argumentos para logging
-function AdvancedSecurityPanel:SanitizeArgs(args)
-    local sanitized = {}
-    for i, arg in ipairs(args) do
-        if type(arg) == "userdata" then
-            sanitized[i] = tostring(arg)
-        elseif type(arg) == "table" then
-            sanitized[i] = "table:" .. tostring(#arg)
-        elseif type(arg) == "string" and #arg > 100 then
-            sanitized[i] = string.sub(arg, 1, 100) .. "...(truncated)"
-        else
-            sanitized[i] = arg
-        end
-    end
-    return sanitized
-end
-
--- Obter caminho completo do objeto
-function AdvancedSecurityPanel:GetFullPath(obj)
-    local path = obj.Name
-    local parent = obj.Parent
-    while parent and parent ~= game do
-        path = parent.Name .. "." .. path
-        parent = parent.Parent
-    end
-    return path
-end
-
--- Monitoramento completo de RemoteEvents
+-- Monitoramento de RemoteEvents CORRIGIDO
 function AdvancedSecurityPanel:MonitorRemoteEvents()
-    self:Log("INFO", "SYSTEM", "Starting RemoteEvents monitoring")
+    self:Log("INFO", "SYSTEM", "Starting safe RemoteEvents monitoring")
     
-    -- Instrumentar eventos existentes
-    local function instrumentDescendants(parent)
-        for _, child in ipairs(parent:GetDescendants()) do
+    local function safeInstrumentFolder(folder)
+        local success, descendants = pcall(function()
+            return folder:GetDescendants()
+        end)
+        
+        if not success then
+            self:Log("ERROR", "MONITORING", 
+                string.format("Failed to get descendants of: %s", folder.Name), {
+                error = descendants
+            })
+            return
+        end
+        
+        for _, child in ipairs(descendants) do
             if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") then
                 self:InstrumentRemoteSafe(child)
             end
         end
     end
     
-    -- Monitorar ReplicatedStorage
-    instrumentDescendants(ReplicatedStorage)
+    -- Monitorar pastas principais
+    local foldersToMonitor = {
+        ReplicatedStorage,
+        game:GetService("Workspace"),
+        game:GetService("Lighting"),
+        game:GetService("StarterPack"),
+        game:GetService("StarterGui")
+    }
     
-    -- Monitorar novos eventos
-    ReplicatedStorage.DescendantAdded:Connect(function(descendant)
-        if descendant:IsA("RemoteEvent") or descendant:IsA("RemoteFunction") then
-            task.wait(0.1) -- Esperar inicialização
-            self:InstrumentRemoteSafe(descendant)
-        end
-    end)
-end
-
--- Monitoramento de ações do personagem
-function AdvancedSecurityPanel:MonitorCharacterActions()
-    self:Log("INFO", "SYSTEM", "Starting Character actions monitoring")
+    for _, folder in ipairs(foldersToMonitor) do
+        safeInstrumentFolder(folder)
+    end
     
-    local lastPosition = nil
-    local lastHealth = nil
-    
-    -- Monitorar movimento e estado
-    RunService.Heartbeat:Connect(function()
-        if LocalPlayer.Character then
-            local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-            local rootPart = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-            
-            if rootPart then
-                local currentPosition = rootPart.Position
-                if lastPosition and (currentPosition - lastPosition).Magnitude > 0.1 then
-                    self:Log("DEBUG", "CHARACTER_MOVEMENT", "Character moved", {
-                        from = lastPosition,
-                        to = currentPosition,
-                        distance = (currentPosition - lastPosition).Magnitude,
-                        velocity = rootPart.Velocity
-                    })
-                end
-                lastPosition = currentPosition
+    -- Monitorar novos remotes de forma segura
+    local function safeDescendantAdded(descendant)
+        local success = pcall(function()
+            if descendant:IsA("RemoteEvent") or descendant:IsA("RemoteFunction") then
+                task.wait(0.5) -- Esperar inicialização
+                AdvancedSecurityPanel:InstrumentRemoteSafe(descendant)
             end
-            
-            if humanoid then
-                local currentHealth = humanoid.Health
-                if lastHealth and currentHealth ~= lastHealth then
-                    self:Log("INFO", "CHARACTER_HEALTH", "Health changed", {
-                        oldHealth = lastHealth,
-                        newHealth = currentHealth,
-                        difference = currentHealth - lastHealth
-                    })
-                end
-                lastHealth = currentHealth
-            end
+        end)
+        
+        if not success then
+            AdvancedSecurityPanel:Log("ERROR", "MONITORING", 
+                "Failed to monitor new descendant")
         end
-    end)
+    end
     
-    -- Monitorar inputs
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if not gameProcessed then
-            self:Log("DEBUG", "PLAYER_INPUT", "Input detected", {
-                inputType = input.UserInputType.Name,
-                keyCode = input.KeyCode.Name,
-                gameProcessed = gameProcessed
-            })
-        end
-    end)
-end
-
--- Monitoramento de eventos de rede
-function AdvancedSecurityPanel:MonitorNetworkEvents()
-    self:Log("INFO", "SYSTEM", "Starting Network events monitoring")
-    
-    -- Monitorar players
-    Players.PlayerAdded:Connect(function(player)
-        self:Log("INFO", "PLAYER_JOINED", "Player joined game", {
-            playerName = player.Name,
-            userId = player.UserId
-        })
-    end)
-    
-    Players.PlayerRemoving:Connect(function(player)
-        self:Log("INFO", "PLAYER_LEFT", "Player left game", {
-            playerName = player.Name,
-            userId = player.UserId
-        })
-    end)
-    
-    -- Monitorar teleportação
-    if TeleportService then
-        TeleportService.TeleportInit:Connect(function(placeId, spawnName)
-            self:Log("WARN", "TELEPORT", "Teleport initiated", {
-                targetPlaceId = placeId,
-                spawnName = spawnName
-            })
+    -- Conectar de forma segura
+    for _, folder in ipairs(foldersToMonitor) do
+        pcall(function()
+            folder.DescendantAdded:Connect(safeDescendantAdded)
         end)
     end
 end
 
--- Sistema avançado de triggers
-function AdvancedSecurityPanel:AddTrigger(name, config)
-    local trigger = {
-        Name = name,
-        EventType = config.EventType,
-        Condition = config.Condition,
-        Action = config.Action,
-        Cooldown = config.Cooldown or 0,
-        LastTriggered = 0
+-- Monitoramento de Personagem CORRIGIDO
+function AdvancedSecurityPanel:MonitorCharacterActions()
+    self:Log("INFO", "SYSTEM", "Starting Character monitoring")
+    
+    local function safeCharacterMonitor()
+        local player = Players.LocalPlayer
+        if not player then return end
+        
+        local lastPosition = nil
+        
+        -- Monitorar movimento
+        RunService.Heartbeat:Connect(function()
+            local success = pcall(function()
+                if player.Character then
+                    local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
+                    if rootPart then
+                        local currentPosition = rootPart.Position
+                        if lastPosition then
+                            local distance = (currentPosition - lastPosition).Magnitude
+                            if distance > 2 then -- Apenas logar movimentos significativos
+                                AdvancedSecurityPanel:Log("DEBUG", "CHARACTER_MOVEMENT", 
+                                    string.format("Moved: %.2f studs", distance), {
+                                    from = lastPosition,
+                                    to = currentPosition
+                                })
+                            end
+                        end
+                        lastPosition = currentPosition
+                    end
+                end
+            end)
+            
+            if not success then
+                -- Silenciar erros de character não críticos
+            end
+        end)
+    end
+    
+    pcall(safeCharacterMonitor)
+end
+
+-- Monitoramento de Inputs
+function AdvancedSecurityPanel:MonitorInputs()
+    local success = pcall(function()
+        UserInputService.InputBegan:Connect(function(input, gameProcessed)
+            if not gameProcessed then
+                AdvancedSecurityPanel:Log("DEBUG", "PLAYER_INPUT", 
+                    string.format("Input: %s", input.KeyCode.Name), {
+                    inputType = input.UserInputType.Name
+                })
+            end
+        end)
+    end)
+    
+    if not success then
+        self:Log("ERROR", "INPUT_MONITOR", "Failed to monitor inputs")
+    end
+end
+
+-- Monitoramento de Players
+function AdvancedSecurityPanel:MonitorPlayers()
+    local success = pcall(function()
+        Players.PlayerAdded:Connect(function(player)
+            AdvancedSecurityPanel:Log("INFO", "PLAYER_JOINED", 
+                string.format("Player joined: %s", player.Name), {
+                userId = player.UserId
+            })
+        end)
+        
+        Players.PlayerRemoving:Connect(function(player)
+            AdvancedSecurityPanel:Log("INFO", "PLAYER_LEFT", 
+                string.format("Player left: %s", player.Name), {
+                userId = player.UserId
+            })
+        end)
+    end)
+    
+    if not success then
+        self:Log("ERROR", "PLAYER_MONITOR", "Failed to monitor players")
+    end
+end
+
+-- Sistema de Triggers Simples
+function AdvancedSecurityPanel:AddTrigger(name, eventType, condition, action)
+    AdvancedSecurityPanel.Triggers[name] = {
+        EventType = eventType,
+        Condition = condition,
+        Action = action
     }
     
-    self.Triggers[name] = trigger
     self:Log("INFO", "TRIGGER", string.format("Trigger added: %s", name))
 end
 
-function AdvancedSecurityPanel:CheckTriggers(eventType, data)
-    for name, trigger in pairs(self.Triggers) do
+function AdvancedSecurityPanel:CheckTrigger(eventType, data)
+    for name, trigger in pairs(AdvancedSecurityPanel.Triggers) do
         if trigger.EventType == eventType then
-            local now = tick()
+            local shouldTrigger = true
             
-            -- Verificar cooldown
-            if now - trigger.LastTriggered >= trigger.Cooldown then
-                local shouldTrigger = true
-                
-                if trigger.Condition then
-                    local success, result = pcall(trigger.Condition, data)
-                    shouldTrigger = success and result
-                end
-                
-                if shouldTrigger then
-                    trigger.LastTriggered = now
-                    self:ExecuteTriggerAction(trigger, data)
-                    self.Statistics.triggersActivated += 1
-                end
+            if trigger.Condition then
+                local success, result = pcall(trigger.Condition, data)
+                shouldTrigger = success and result
+            end
+            
+            if shouldTrigger then
+                pcall(trigger.Action, data)
+                AdvancedSecurityPanel.Statistics.triggersActivated += 1
             end
         end
     end
 end
 
-function AdvancedSecurityPanel:ExecuteTriggerAction(trigger, data)
-    local action = trigger.Action
-    
-    if action.Type == "LOG" then
-        self:Log("INFO", "TRIGGER_ACTIVATED", string.format("Trigger '%s' activated", trigger.Name), {
-            triggerData = data,
-            triggerName = trigger.Name
-        })
-    elseif action.Type == "EXECUTE_SCRIPT" and action.Script then
-        local success, result = pcall(action.Script, data)
-        if not success then
-            self:Log("ERROR", "TRIGGER_ACTION", string.format("Trigger action failed: %s", trigger.Name), {
-                error = result
+-- Triggers padrão
+function AdvancedSecurityPanel:SetupDefaultTriggers()
+    -- Trigger para movimento rápido
+    self:AddTrigger("FAST_MOVEMENT", "CHARACTER_MOVEMENT", 
+        function(data)
+            return data.distance and data.distance > 50
+        end,
+        function(data)
+            AdvancedSecurityPanel:Log("WARN", "SUSPICIOUS", 
+                "Fast movement detected!", {
+                speed = data.distance,
+                position = data.to
             })
         end
-    elseif action.Type == "CAPTURE_DATA" then
-        self:CaptureDetailedData(action.DataPoints)
-    end
-end
-
--- Captura de dados detalhada
-function AdvancedSecurityPanel:CaptureDetailedData(dataPoints)
-    local captureData = {}
+    )
     
-    for _, point in ipairs(dataPoints) do
-        if point == "character_state" and LocalPlayer.Character then
-            local char = LocalPlayer.Character
-            captureData.characterState = {
-                position = char:FindFirstChild("HumanoidRootPart") and char.HumanoidRootPart.Position,
-                health = char:FindFirstChildOfClass("Humanoid") and char.Humanoid.Health
-            }
-        elseif point == "player_data" then
-            captureData.playerData = {
-                userId = LocalPlayer.UserId,
-                accountAge = LocalPlayer.AccountAge,
-                membership = LocalPlayer.MembershipType.Name
-            }
-        end
-    end
+    -- Trigger para muitos eventos em curto tempo
+    local eventCount = 0
+    local lastReset = tick()
     
-    self:Log("INFO", "DATA_CAPTURE", "Detailed data captured", captureData)
-end
-
--- Interface gráfica avançada
-function AdvancedSecurityPanel:CreateAdvancedUI()
-    if not (gethui or syn and syn.protect_gui) then
-        self:Log("WARN", "UI", "UI creation not supported in this environment")
-        return
-    end
-    
-    local success, ui = pcall(function()
-        local ScreenGui = Instance.new("ScreenGui")
-        if gethui then
-            ScreenGui.Parent = gethui()
-        elseif syn then
-            syn.protect_gui(ScreenGui)
-            ScreenGui.Parent = game:GetService("CoreGui")
-        end
-        
-        -- Implementação completa da UI aqui
-        -- (código extenso para criar uma interface robusta)
-        
-        return ScreenGui
-    end)
-    
-    if not success then
-        self:Log("ERROR", "UI", "Failed to create UI", {error = ui})
-    end
-end
-
--- Atualizar display de logs
-function AdvancedSecurityPanel:UpdateLogDisplay(logEntry)
-    -- Implementação para atualizar a UI
-    -- Pode ser conectada à interface gráfica
-end
-
--- Salvar logs em arquivo
-function AdvancedSecurityPanel:SaveLogToFile(logEntry)
-    -- Implementação para salvar em arquivo
-end
-
--- Exemplo de triggers predefinidos
-function AdvancedSecurityPanel:SetupDefaultTriggers()
-    -- Trigger para movimento suspeito
-    self:AddTrigger("SUSPICIOUS_MOVEMENT", {
-        EventType = "CHARACTER_MOVEMENT",
-        Condition = function(data)
-            return data.velocity and data.velocity.Magnitude > 100
+    self:AddTrigger("EVENT_SPAM", "REMOTE_EVENT", 
+        function(data)
+            local now = tick()
+            if now - lastReset > 1 then -- Reset a cada segundo
+                eventCount = 0
+                lastReset = now
+            end
+            
+            eventCount = eventCount + 1
+            return eventCount > 10 -- Mais de 10 eventos por segundo
         end,
-        Action = {
-            Type = "LOG",
-            Message = "Movimento em alta velocidade detectado"
-        },
-        Cooldown = 5
-    })
-    
-    -- Trigger para eventos de dano
-    self:AddTrigger("HEALTH_CHANGE", {
-        EventType = "CHARACTER_HEALTH",
-        Condition = function(data)
-            return data.difference and math.abs(data.difference) > 10
-        end,
-        Action = {
-            Type = "CAPTURE_DATA",
-            DataPoints = {"character_state", "player_data"}
-        }
-    })
+        function(data)
+            AdvancedSecurityPanel:Log("WARN", "SUSPICIOUS", 
+                "Possible event spam detected!")
+        end
+    )
 end
 
--- Sistema de relatórios
-function AdvancedSecurityPanel:GenerateReport()
-    local report = {
-        sessionStart = tick(),
-        statistics = self.Statistics,
-        recentLogs = {},
-        triggers = self.Triggers
+-- Interface Simples no Console
+function AdvancedSecurityPanel:CreateConsoleInterface()
+    self:Log("INFO", "SYSTEM", "=== ADVANCED SECURITY PANEL STARTED ===")
+    self:Log("INFO", "SYSTEM", "Monitoring: RemoteEvents, Character, Inputs, Players")
+    self:Log("INFO", "SYSTEM", "Triggers: Fast Movement, Event Spam")
+    self:Log("INFO", "SYSTEM", "Use: AdvancedSecurityPanel:Log('INFO', 'TEST', 'Message')")
+    self:Log("INFO", "SYSTEM", "========================================")
+end
+
+-- Inicialização CORRIGIDA
+function AdvancedSecurityPanel:Init()
+    self:Log("INFO", "SYSTEM", "Initializing Advanced Security Panel...")
+    
+    -- Inicializar componentes com proteção
+    local components = {
+        {"RemoteEvents", function() self:MonitorRemoteEvents() end},
+        {"Character", function() self:MonitorCharacterActions() end},
+        {"Inputs", function() self:MonitorInputs() end},
+        {"Players", function() self:MonitorPlayers() end},
+        {"Triggers", function() self:SetupDefaultTriggers() end},
+        {"Interface", function() self:CreateConsoleInterface() end}
     }
     
-    -- Coletar logs recentes
-    for i = math.max(1, #self.Logs - 10), #self.Logs do
-        table.insert(report.recentLogs, self.Logs[i])
+    for _, component in ipairs(components) do
+        local name, func = component[1], component[2]
+        local success, err = pcall(func)
+        
+        if not success then
+            self:Log("ERROR", "INIT", 
+                string.format("Failed to initialize %s", name), {
+                error = err
+            })
+        else
+            self:Log("INFO", "INIT", 
+                string.format("Successfully initialized %s", name))
+        end
     end
     
-    return report
+    self:Log("INFO", "SYSTEM", "Advanced Security Panel Ready!")
+    return true
 end
 
--- Inicialização robusta
-function AdvancedSecurityPanel:Init()
-    self:Log("INFO", "SYSTEM", "Advanced Security Panel Initializing")
-    
-    -- Esperar player carregar
-    if not LocalPlayer then
-        Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
-        LocalPlayer = Players.LocalPlayer
-    end
-    
-    -- Inicializar componentes
-    local initSuccess, initError = pcall(function()
-        self:MonitorRemoteEvents()
-        self:MonitorCharacterActions()
-        self:MonitorNetworkEvents()
-        self:SetupDefaultTriggers()
-        self:CreateAdvancedUI()
-    end)
-    
-    if not initSuccess then
-        self:Log("ERROR", "SYSTEM", "Initialization failed", {error = initError})
-        return false
-    end
-    
-    self:Log("INFO", "SYSTEM", "Advanced Security Panel Started Successfully")
-    return true
+-- Funções públicas para uso
+function AdvancedSecurityPanel:GetLogs()
+    return self.Logs
+end
+
+function AdvancedSecurityPanel:GetStats()
+    return self.Statistics
+end
+
+function AdvancedSecurityPanel:ClearLogs()
+    self.Logs = {}
+    self.Statistics.eventsLogged = 0
+    self:Log("INFO", "SYSTEM", "Logs cleared")
 end
 
 -- Auto-inicialização
 if AdvancedSecurityPanel.Config.AutoStart then
-    local success = AdvancedSecurityPanel:Init()
+    local success, err = pcall(function()
+        return AdvancedSecurityPanel:Init()
+    end)
+    
     if not success then
-        warn("AdvancedSecurityPanel: Failed to initialize")
+        warn("AdvancedSecurityPanel: Critical initialization failed - " .. tostring(err))
     end
 end
+
+-- Tornar global para acesso fácil
+getgenv().AdvancedSecurityPanel = AdvancedSecurityPanel
 
 return AdvancedSecurityPanel
