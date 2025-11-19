@@ -1,6 +1,6 @@
--- SHAKA LOGGER v2.0 - VERSÃO OTIMIZADA
+-- SHAKA LOGGER v2.0 - VERSÃO OTIMIZADA E CORRIGIDA
 -- Sistema de logging e replay de eventos
--- Corrigido: Performance, crashes e overflow
+-- Corrigido: Performance, crashes, overflow e nil values
 
 local ShakaLogger = {}
 
@@ -164,8 +164,13 @@ end
 
 function ShakaLogger:CaptureEvent(remote, eventType, args)
     if not State.Capture.Remote then return end
+    if not remote or not remote.Parent then return end
     
-    local path = GetRemotePath(remote)
+    local success, path = pcall(function()
+        return remote:GetFullName()
+    end)
+    
+    if not success then return end
     
     -- Verificar se está bloqueado
     if self:IsBlocked(path) then
@@ -194,7 +199,9 @@ function ShakaLogger:CaptureEvent(remote, eventType, args)
     
     -- Log simplificado
     local argsStr = FormatArgs(args)
-    self:AddLog("Remote", string.format("📡 %s %s", remote.Name, argsStr))
+    pcall(function()
+        self:AddLog("Remote", string.format("📡 %s %s", remote.Name, argsStr))
+    end)
 end
 
 function ShakaLogger:HookRemotes()
