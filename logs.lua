@@ -1,53 +1,45 @@
--- Ultimate Security MOD MENU - COMPLETO E ORGANIZADO
+-- ULTIMATE SECURITY MENU - DELTA EXECUTOR COMPATIBLE
 -- APENAS para pentest autorizado
 
-local UltimateMenu = {}
+local SecurityMenu = {}
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ReplicatedStorage = game:GetService("ReplicatedStorage") 
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local HttpService = game:GetService("HttpService")
 
--- Configurações
-UltimateMenu.OpenKey = Enum.KeyCode.F5
-UltimateMenu.IsOpen = false
-UltimateMenu.CurrentTab = "Dashboard"
+-- Configurações básicas
+SecurityMenu.OpenKey = Enum.KeyCode.RightShift
+SecurityMenu.IsOpen = false
+SecurityMenu.CurrentTab = "Dashboard"
 
 -- Sistema de logs organizado
-UltimateMenu.Logs = {
+SecurityMenu.Logs = {
     All = {},
-    RemoteEvents = {},
+    Remote = {},
     Character = {},
     Network = {},
-    Inputs = {},
-    Triggers = {},
-    System = {},
-    Errors = {}
+    Input = {},
+    Triggers = {}
 }
 
-UltimateMenu.Stats = {
+SecurityMenu.Stats = {
     Total = 0,
-    RemoteEvents = 0,
-    Character = 0,
+    Remote = 0,
+    Character = 0, 
     Network = 0,
-    Inputs = 0,
-    Triggers = 0,
-    System = 0,
-    Errors = 0
+    Input = 0,
+    Triggers = 0
 }
 
-UltimateMenu.TriggersList = {}
-UltimateMenu.MonitoredRemotes = {}
+SecurityMenu.TriggersList = {}
 
--- Função de logging avançada
-function UltimateMenu:AddLog(category, message, data)
+-- Função de logging SEGURA
+function SecurityMenu:Log(category, message)
     local logEntry = {
-        ID = #self.Logs.All + 1,
         Time = os.date("%H:%M:%S"),
         Category = category,
         Message = message,
-        Data = data or {},
-        Timestamp = tick()
+        ID = #self.Logs.All + 1
     }
     
     -- Adicionar aos logs
@@ -56,268 +48,132 @@ function UltimateMenu:AddLog(category, message, data)
     
     -- Atualizar estatísticas
     self.Stats.Total = self.Stats.Total + 1
-    self.Stats[category] = (self.Stats[category] or 0) + 1
+    self.Stats[category] = self.Stats[category] + 1
     
     -- Print no console
-    print("[" .. logEntry.Time .. "][" .. category .. "] " .. message)
+    print("[" .. logEntry.Time .. "] " .. category .. ": " .. message)
     
-    -- Verificar triggers
-    self:CheckTriggers(category, logEntry)
-    
-    -- Atualizar UI
+    -- Atualizar UI se estiver aberta
     if self.IsOpen then
-        self:UpdateCurrentTab()
+        self:UpdateDisplay()
     end
 end
 
--- Sistema de Triggers
-function UltimateMenu:AddTrigger(name, condition, action)
+-- Sistema de Triggers SIMPLES
+function SecurityMenu:AddTrigger(name, condition, action)
     self.TriggersList[name] = {
         Condition = condition,
-        Action = action,
-        LastTrigger = 0
+        Action = action
     }
-    self:AddLog("System", "🔔 Trigger adicionado: " .. name)
+    self:Log("System", "Trigger adicionado: " .. name)
 end
 
-function UltimateMenu:CheckTriggers(category, logEntry)
+function SecurityMenu:CheckTriggers(category, message)
     for triggerName, trigger in pairs(self.TriggersList) do
-        local now = tick()
-        if now - trigger.LastTrigger > 1 then -- Cooldown de 1 segundo
-            local shouldTrigger = true
-            
-            if trigger.Condition then
-                local success, result = pcall(trigger.Condition, category, logEntry)
-                shouldTrigger = success and result
-            end
-            
-            if shouldTrigger then
-                trigger.LastTrigger = now
-                pcall(trigger.Action, logEntry)
-                self:AddLog("Triggers", "🚨 TRIGGER: " .. triggerName, logEntry.Data)
-            end
+        local success, result = pcall(trigger.Condition, category, message)
+        if success and result then
+            pcall(trigger.Action, message)
+            self:Log("Triggers", "🚨 " .. triggerName .. " acionado!")
         end
     end
 end
 
--- Monitoramento AVANÇADO de RemoteEvents
-function UltimateMenu:MonitorRemoteEvents()
-    self:AddLog("System", "Iniciando monitoramento de RemoteEvents...")
+-- Monitoramento SEGURO de RemoteEvents
+function SecurityMenu:MonitorRemoteEvents()
+    self:Log("System", "Iniciando monitoramento de RemoteEvents...")
     
-    local function instrumentRemote(remote)
-        if UltimateMenu.MonitoredRemotes[remote] then return end
-        
-        local remoteType = remote.ClassName
-        local remotePath = UltimateMenu:GetObjectPath(remote)
-        
+    local function safeMonitor(remote)
         if remote:IsA("RemoteEvent") then
-            local originalFire = remote.FireServer
+            local original = remote.FireServer
             remote.FireServer = function(self, ...)
                 local args = {...}
-                local success, result = pcall(originalFire, self, unpack(args))
-                
-                UltimateMenu:AddLog("RemoteEvents", 
-                    "📡 " .. remote.Name .. " (FireServer)", {
-                    Path = remotePath,
-                    ArgsCount = #args,
-                    Success = success,
-                    Arguments = UltimateMenu:SanitizeArgs(args)
-                })
-                
-                return result
+                local success = pcall(original, self, unpack(args))
+                SecurityMenu:Log("Remote", remote.Name .. " fired")
+                SecurityMenu:CheckTriggers("Remote", remote.Name .. " fired")
+                return
             end
-            
         elseif remote:IsA("RemoteFunction") then
-            local originalInvoke = remote.InvokeServer
+            local original = remote.InvokeServer
             remote.InvokeServer = function(self, ...)
                 local args = {...}
-                local success, result = pcall(originalInvoke, self, unpack(args))
-                
-                UltimateMenu:AddLog("RemoteEvents", 
-                    "🔧 " .. remote.Name .. " (InvokeServer)", {
-                    Path = remotePath,
-                    ArgsCount = #args,
-                    Success = success,
-                    Result = tostring(result)
-                })
-                
+                local result = original(self, unpack(args))
+                SecurityMenu:Log("Remote", remote.Name .. " invoked") 
+                SecurityMenu:CheckTriggers("Remote", remote.Name .. " invoked")
                 return result
             end
         end
-        
-        UltimateMenu.MonitoredRemotes[remote] = true
-        UltimateMenu:AddLog("System", "✅ Monitorando: " .. remotePath)
     end
 
-    -- Instrumentar de forma segura
-    local function safeScanFolder(folder)
-        local success, descendants = pcall(function()
-            return folder:GetDescendants()
-        end)
-        
-        if success then
-            for _, child in ipairs(descendants) do
-                if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") then
-                    pcall(instrumentRemote, child)
-                end
-            end
+    -- Monitorar apenas ReplicatedStorage (EVITA ERROS)
+    for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+        if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
+            pcall(safeMonitor, remote)
         end
     end
-
-    -- Scan em pastas seguras
-    local safeFolders = {ReplicatedStorage}
-    for _, folder in ipairs(safeFolders) do
-        safeScanFolder(folder)
-    end
-
-    -- Monitorar novos remotes
-    pcall(function()
-        ReplicatedStorage.DescendantAdded:Connect(function(descendant)
-            if descendant:IsA("RemoteEvent") or descendant:IsA("RemoteFunction") then
-                task.wait(0.5)
-                pcall(instrumentRemote, descendant)
-            end
-        end)
-    end)
+    
+    self:Log("System", "RemoteEvents monitorados com sucesso!")
 end
 
--- Monitoramento COMPLETO de Character
-function UltimateMenu:MonitorCharacter()
-    local lastPosition = nil
-    local lastHealth = 100
+-- Monitoramento de Character
+function SecurityMenu:MonitorCharacter()
+    local lastPos = nil
     
     RunService.Heartbeat:Connect(function()
         local player = Players.LocalPlayer
-        if not player or not player.Character then return end
-        
-        local character = player.Character
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
-        local rootPart = character:FindFirstChild("HumanoidRootPart")
-        
-        -- Monitorar movimento
-        if rootPart then
-            local currentPosition = rootPart.Position
-            if lastPosition then
-                local distance = (currentPosition - lastPosition).Magnitude
-                if distance > 5 then
-                    UltimateMenu:AddLog("Character", "🎯 Movimento detectado", {
-                        Distance = math.floor(distance),
-                        Velocity = math.floor(rootPart.Velocity.Magnitude),
-                        Position = {
-                            X = math.floor(currentPosition.X),
-                            Y = math.floor(currentPosition.Y),
-                            Z = math.floor(currentPosition.Z)
-                        }
-                    })
+        if player and player.Character then
+            local root = player.Character:FindFirstChild("HumanoidRootPart")
+            if root then
+                local currentPos = root.Position
+                if lastPos then
+                    local dist = (currentPos - lastPos).Magnitude
+                    if dist > 3 then
+                        SecurityMenu:Log("Character", "Movimento: " .. math.floor(dist) .. " studs")
+                        SecurityMenu:CheckTriggers("Character", "Movimento rápido: " .. math.floor(dist))
+                    end
                 end
+                lastPos = currentPos
             end
-            lastPosition = currentPosition
-        end
-        
-        -- Monitorar saúde
-        if humanoid then
-            local currentHealth = humanoid.Health
-            if math.abs(currentHealth - lastHealth) > 5 then
-                UltimateMenu:AddLog("Character", "❤️ Saúde alterada", {
-                    De = math.floor(lastHealth),
-                    Para = math.floor(currentHealth),
-                    Diferenca = math.floor(currentHealth - lastHealth)
-                })
-            end
-            lastHealth = currentHealth
         end
     end)
 end
 
 -- Monitoramento de Inputs
-function UltimateMenu:MonitorInputs()
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if not gameProcessed then
-            if input.UserInputType == Enum.UserInputType.Keyboard then
-                UltimateMenu:AddLog("Inputs", "⌨️ Tecla: " .. input.KeyCode.Name, {
-                    KeyCode = input.KeyCode.Value
-                })
-            elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
-                UltimateMenu:AddLog("Inputs", "🖱️ Mouse Click", {
-                    Position = input.Position
-                })
-            end
+function SecurityMenu:MonitorInputs()
+    UserInputService.InputBegan:Connect(function(input, processed)
+        if not processed and input.UserInputType == Enum.UserInputType.Keyboard then
+            SecurityMenu:Log("Input", "Tecla: " .. input.KeyCode.Name)
+            SecurityMenu:CheckTriggers("Input", "Tecla: " .. input.KeyCode.Name)
         end
     end)
 end
 
--- Monitoramento de Network
-function UltimateMenu:MonitorNetwork()
+-- Monitoramento de Network  
+function SecurityMenu:MonitorNetwork()
     Players.PlayerAdded:Connect(function(player)
-        UltimateMenu:AddLog("Network", "👤 " .. player.Name .. " entrou", {
-            UserId = player.UserId,
-            AccountAge = player.AccountAge
-        })
+        SecurityMenu:Log("Network", player.Name .. " entrou no jogo")
     end)
     
     Players.PlayerRemoving:Connect(function(player)
-        UltimateMenu:AddLog("Network", "👋 " .. player.Name .. " saiu", {
-            UserId = player.UserId
-        })
+        SecurityMenu:Log("Network", player.Name .. " saiu do jogo")
     end)
 end
 
--- Funções utilitárias
-function UltimateMenu:GetObjectPath(obj)
-    local path = obj.Name
-    local parent = obj.Parent
-    while parent and parent ~= game do
-        path = parent.Name .. "/" .. path
-        parent = parent.Parent
-    end
-    return path
-end
-
-function UltimateMenu:SanitizeArgs(args)
-    local sanitized = {}
-    for i, arg in ipairs(args) do
-        local argType = type(arg)
-        if argType == "string" then
-            sanitized[i] = #arg > 30 and string.sub(arg, 1, 30) .. "..." : arg
-        elseif argType == "number" then
-            sanitized[i] = tostring(arg)
-        elseif argType == "boolean" then
-            sanitized[i] = tostring(arg)
-        else
-            sanitized[i] = argType
-        end
-    end
-    return sanitized
-end
-
--- Criar Interface PROFISSIONAL com Abas
-function UltimateMenu:CreateUI()
+-- Criar Interface SIMPLES E FUNCIONAL
+function SecurityMenu:CreateUI()
+    -- Destruir UI existente
     if self.ScreenGui then
         self.ScreenGui:Destroy()
     end
     
+    -- Criar nova UI
     self.ScreenGui = Instance.new("ScreenGui")
     self.ScreenGui.Parent = game:GetService("CoreGui")
-    self.ScreenGui.Name = "UltimateSecurityMenu"
-    
-    -- Cores do tema
-    local Theme = {
-        Background = Color3.fromRGB(35, 35, 45),
-        Header = Color3.fromRGB(50, 50, 60),
-        Tab = Color3.fromRGB(60, 60, 70),
-        TabActive = Color3.fromRGB(0, 120, 215),
-        Text = Color3.fromRGB(255, 255, 255),
-        TextSecondary = Color3.fromRGB(180, 180, 180),
-        Success = Color3.fromRGB(76, 175, 80),
-        Warning = Color3.fromRGB(255, 152, 0),
-        Error = Color3.fromRGB(244, 67, 54)
-    }
     
     -- Frame principal
     local MainFrame = Instance.new("Frame")
-    MainFrame.Size = UDim2.new(0, 800, 0, 500)
-    MainFrame.Position = UDim2.new(0.5, -400, 0.5, -250)
-    MainFrame.BackgroundColor3 = Theme.Background
+    MainFrame.Size = UDim2.new(0, 600, 0, 450)
+    MainFrame.Position = UDim2.new(0.5, -300, 0.5, -225)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
     MainFrame.BorderSizePixel = 0
     MainFrame.Visible = false
     MainFrame.Parent = self.ScreenGui
@@ -325,7 +181,7 @@ function UltimateMenu:CreateUI()
     -- Header
     local Header = Instance.new("Frame")
     Header.Size = UDim2.new(1, 0, 0, 40)
-    Header.BackgroundColor3 = Theme.Header
+    Header.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
     Header.BorderSizePixel = 0
     Header.Parent = MainFrame
     
@@ -333,8 +189,8 @@ function UltimateMenu:CreateUI()
     Title.Size = UDim2.new(1, -100, 1, 0)
     Title.Position = UDim2.new(0, 15, 0, 0)
     Title.BackgroundTransparency = 1
-    Title.Text = "🔒 ULTIMATE SECURITY MENU"
-    Title.TextColor3 = Theme.Text
+    Title.Text = "🔒 SECURITY MENU"
+    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
     Title.TextXAlignment = Enum.TextXAlignment.Left
     Title.Font = Enum.Font.GothamBold
     Title.TextSize = 16
@@ -343,35 +199,35 @@ function UltimateMenu:CreateUI()
     local CloseBtn = Instance.new("TextButton")
     CloseBtn.Size = UDim2.new(0, 80, 0, 25)
     CloseBtn.Position = UDim2.new(1, -85, 0.5, -12)
-    CloseBtn.BackgroundColor3 = Theme.Error
+    CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
     CloseBtn.BorderSizePixel = 0
-    CloseBtn.Text = "FECHAR [F5]"
-    CloseBtn.TextColor3 = Theme.Text
+    CloseBtn.Text = "FECHAR"
+    CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     CloseBtn.Font = Enum.Font.GothamBold
     CloseBtn.TextSize = 12
     CloseBtn.Parent = Header
     
     -- Tabs
     local TabContainer = Instance.new("Frame")
-    TabContainer.Size = UDim2.new(1, 0, 0, 35)
+    TabContainer.Size = UDim2.new(1, 0, 0, 30)
     TabContainer.Position = UDim2.new(0, 0, 0, 40)
-    TabContainer.BackgroundColor3 = Theme.Tab
+    TabContainer.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
     TabContainer.BorderSizePixel = 0
     TabContainer.Parent = MainFrame
     
-    local Tabs = {"Dashboard", "RemoteEvents", "Character", "Network", "Inputs", "Triggers", "Logs"}
+    local Tabs = {"Dashboard", "Remote", "Character", "Network", "Input", "Triggers"}
     self.TabButtons = {}
     
     for i, tabName in ipairs(Tabs) do
         local TabButton = Instance.new("TextButton")
-        TabButton.Size = UDim2.new(0, 114, 1, 0)
-        TabButton.Position = UDim2.new(0, (i-1)*114, 0, 0)
-        TabButton.BackgroundColor3 = Theme.Tab
+        TabButton.Size = UDim2.new(0, 100, 1, 0)
+        TabButton.Position = UDim2.new(0, (i-1)*100, 0, 0)
+        TabButton.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
         TabButton.BorderSizePixel = 0
         TabButton.Text = tabName
-        TabButton.TextColor3 = Theme.TextSecondary
+        TabButton.TextColor3 = Color3.fromRGB(180, 180, 180)
         TabButton.Font = Enum.Font.Gotham
-        TabButton.TextSize = 12
+        TabButton.TextSize = 11
         TabButton.Parent = TabContainer
         
         TabButton.MouseButton1Click:Connect(function()
@@ -383,8 +239,8 @@ function UltimateMenu:CreateUI()
     
     -- Área de conteúdo
     local ContentFrame = Instance.new("Frame")
-    ContentFrame.Size = UDim2.new(1, 0, 1, -75)
-    ContentFrame.Position = UDim2.new(0, 0, 0, 75)
+    ContentFrame.Size = UDim2.new(1, 0, 1, -70)
+    ContentFrame.Position = UDim2.new(0, 0, 0, 70)
     ContentFrame.BackgroundTransparency = 1
     ContentFrame.Parent = MainFrame
     
@@ -397,14 +253,13 @@ function UltimateMenu:CreateUI()
         Frame.Position = UDim2.new(0, 0, 0, 0)
         Frame.BackgroundTransparency = 1
         Frame.BorderSizePixel = 0
-        Frame.ScrollBarThickness = 8
-        Frame.ScrollBarImageColor3 = Theme.TabActive
+        Frame.ScrollBarThickness = 6
         Frame.Visible = false
         Frame.AutomaticCanvasSize = Enum.AutomaticSize.Y
         Frame.Parent = ContentFrame
         
         local Layout = Instance.new("UIListLayout")
-        Layout.Padding = UDim.new(0, 10)
+        Layout.Padding = UDim.new(0, 5)
         Layout.Parent = Frame
         
         self.ContentFrames[tabName] = Frame
@@ -416,20 +271,19 @@ function UltimateMenu:CreateUI()
     end)
     
     self.MainFrame = MainFrame
-    self.Theme = Theme
     
     -- Selecionar tab inicial
     self:SwitchTab("Dashboard")
 end
 
 -- Sistema de Abas
-function UltimateMenu:SwitchTab(tabName)
+function SecurityMenu:SwitchTab(tabName)
     self.CurrentTab = tabName
     
     -- Esconder todas as tabs
     for name, frame in pairs(self.ContentFrames) do
         frame.Visible = false
-        -- Limpar conteúdo anterior
+        -- Limpar conteúdo
         for _, child in ipairs(frame:GetChildren()) do
             if child:IsA("Frame") then
                 child:Destroy()
@@ -440,162 +294,106 @@ function UltimateMenu:SwitchTab(tabName)
     -- Atualizar botões
     for name, button in pairs(self.TabButtons) do
         if name == tabName then
-            button.BackgroundColor3 = self.Theme.TabActive
-            button.TextColor3 = self.Theme.Text
+            button.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+            button.TextColor3 = Color3.fromRGB(255, 255, 255)
         else
-            button.BackgroundColor3 = self.Theme.Tab
-            button.TextColor3 = self.Theme.TextSecondary
+            button.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+            button.TextColor3 = Color3.fromRGB(180, 180, 180)
         end
     end
     
     -- Mostrar tab atual
-    if self.ContentFrames[tabName] then
-        self.ContentFrames[tabName].Visible = true
-        self:UpdateTabContent(tabName)
-    end
+    self.ContentFrames[tabName].Visible = true
+    self:UpdateTabContent(tabName)
 end
 
-function UltimateMenu:UpdateCurrentTab()
-    self:UpdateTabContent(self.CurrentTab)
-end
-
-function UltimateMenu:UpdateTabContent(tabName)
+function SecurityMenu:UpdateTabContent(tabName)
     local frame = self.ContentFrames[tabName]
     if not frame then return end
     
     if tabName == "Dashboard" then
-        self:CreateDashboardContent(frame)
-    elseif tabName == "RemoteEvents" then
-        self:CreateRemoteEventsContent(frame)
+        self:CreateDashboard(frame)
+    elseif tabName == "Remote" then
+        self:CreateRemoteTab(frame)
     elseif tabName == "Character" then
-        self:CreateCharacterContent(frame)
+        self:CreateCharacterTab(frame)
     elseif tabName == "Network" then
-        self:CreateNetworkContent(frame)
-    elseif tabName == "Inputs" then
-        self:CreateInputsContent(frame)
+        self:CreateNetworkTab(frame)
+    elseif tabName == "Input" then
+        self:CreateInputTab(frame)
     elseif tabName == "Triggers" then
-        self:CreateTriggersContent(frame)
-    elseif tabName == "Logs" then
-        self:CreateLogsContent(frame)
+        self:CreateTriggersTab(frame)
     end
 end
 
 -- Conteúdo das Abas
-function UltimateMenu:CreateDashboardContent(frame)
+function SecurityMenu:CreateDashboard(frame)
     -- Estatísticas
-    local statsFrame = self:CreateSection(frame, "📊 ESTATÍSTICAS EM TEMPO REAL", 10)
+    local statsFrame = self:CreateSection(frame, "📊 ESTATÍSTICAS", 10)
     
     local stats = {
-        {"Eventos Totais", "Total", self.Theme.Text},
-        {"Remote Events", "RemoteEvents", self.Theme.Success},
-        {"Character Events", "Character", self.Theme.Success},
-        {"Network Events", "Network", self.Theme.Success},
-        {"Input Events", "Inputs", self.Theme.Success},
-        {"Triggers", "Triggers", self.Theme.Warning},
-        {"Erros", "Errors", self.Theme.Error}
+        {"Total Events", self.Stats.Total},
+        {"Remote Events", self.Stats.Remote},
+        {"Character Events", self.Stats.Character},
+        {"Network Events", self.Stats.Network},
+        {"Input Events", self.Stats.Input},
+        {"Triggers", self.Stats.Triggers}
     }
     
     for i, stat in ipairs(stats) do
-        self:CreateStatRow(statsFrame, stat[1], self.Stats[stat[2]], stat[3], i)
+        self:CreateStatRow(statsFrame, stat[1], stat[2], i)
     end
     
     -- Controles
-    local controlsFrame = self:CreateSection(frame, "🛠️ CONTROLES", 180)
+    local controlsFrame = self:CreateSection(frame, "🛠️ CONTROLES", 160)
     
     local clearBtn = Instance.new("TextButton")
-    clearBtn.Size = UDim2.new(0, 150, 0, 30)
+    clearBtn.Size = UDim2.new(0, 140, 0, 30)
     clearBtn.Position = UDim2.new(0, 20, 0, 30)
-    clearBtn.BackgroundColor3 = self.Theme.Warning
+    clearBtn.BackgroundColor3 = Color3.fromRGB(255, 150, 50)
     clearBtn.BorderSizePixel = 0
     clearBtn.Text = "🧹 LIMPAR LOGS"
-    clearBtn.TextColor3 = self.Theme.Text
+    clearBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     clearBtn.Font = Enum.Font.GothamBold
     clearBtn.TextSize = 12
     clearBtn.Parent = controlsFrame
     
     clearBtn.MouseButton1Click:Connect(function()
-        self:ClearAllLogs()
+        self:ClearLogs()
     end)
 end
 
-function UltimateMenu:CreateRemoteEventsContent(frame)
-    local section = self:CreateSection(frame, "📡 REMOTE EVENTS MONITORADOS", 10)
-    
-    local monitoredCount = 0
-    for _ in pairs(self.MonitoredRemotes) do
-        monitoredCount = monitoredCount + 1
-    end
-    
-    self:CreateInfoRow(section, "Remotes Monitorados", tostring(monitoredCount), 1)
-    self:CreateInfoRow(section, "Eventos Capturados", tostring(self.Stats.RemoteEvents), 2)
-    
-    -- Últimos eventos
-    local eventsFrame = self:CreateSection(frame, "🔍 ÚLTIMOS EVENTOS", 80)
-    self:DisplayLogsInSection(eventsFrame, self.Logs.RemoteEvents, 10)
+function SecurityMenu:CreateRemoteTab(frame)
+    local section = self:CreateSection(frame, "📡 REMOTE EVENTS", 10)
+    self:DisplayLogs(section, self.Logs.Remote, 15)
 end
 
-function UltimateMenu:CreateCharacterContent(frame)
-    local section = self:CreateSection(frame, "🎯 MONITORAMENTO DO PERSONAGEM", 10)
-    self:CreateInfoRow(section, "Eventos Capturados", tostring(self.Stats.Character), 1)
-    
-    local eventsFrame = self:CreateSection(frame, "📝 ATIVIDADE RECENTE", 50)
-    self:DisplayLogsInSection(eventsFrame, self.Logs.Character, 8)
+function SecurityMenu:CreateCharacterTab(frame)
+    local section = self:CreateSection(frame, "🎯 CHARACTER", 10)
+    self:DisplayLogs(section, self.Logs.Character, 15)
 end
 
-function UltimateMenu:CreateNetworkContent(frame)
-    local section = self:CreateSection(frame, "🌐 ATIVIDADE DE REDE", 10)
-    self:CreateInfoRow(section, "Eventos Capturados", tostring(self.Stats.Network), 1)
-    
-    local eventsFrame = self:CreateSection(frame, "👥 PLAYERS RECENTES", 50)
-    self:DisplayLogsInSection(eventsFrame, self.Logs.Network, 8)
+function SecurityMenu:CreateNetworkTab(frame)
+    local section = self:CreateSection(frame, "🌐 NETWORK", 10)
+    self:DisplayLogs(section, self.Logs.Network, 15)
 end
 
-function UltimateMenu:CreateInputsContent(frame)
-    local section = self:CreateSection(frame, "⌨️ MONITORAMENTO DE INPUTS", 10)
-    self:CreateInfoRow(section, "Inputs Capturados", tostring(self.Stats.Inputs), 1)
-    
-    local eventsFrame = self:CreateSection(frame, "🔑 INPUTS RECENTES", 50)
-    self:DisplayLogsInSection(eventsFrame, self.Logs.Inputs, 10)
+function SecurityMenu:CreateInputTab(frame)
+    local section = self:CreateSection(frame, "⌨️ INPUTS", 10)
+    self:DisplayLogs(section, self.Logs.Input, 15)
 end
 
-function UltimateMenu:CreateTriggersContent(frame)
-    local section = self:CreateSection(frame, "🚨 SISTEMA DE TRIGGERS", 10)
-    
-    local triggerCount = 0
-    for _ in pairs(self.TriggersList) do
-        triggerCount = triggerCount + 1
-    end
-    
-    self:CreateInfoRow(section, "Triggers Ativos", tostring(triggerCount), 1)
-    self:CreateInfoRow(section, "Triggers Acionados", tostring(self.Stats.Triggers), 2)
-    
-    -- Triggers ativos
-    local triggersFrame = self:CreateSection(frame, "⚡ TRIGGERS ATIVOS", 60)
-    local i = 1
-    for triggerName, _ in pairs(self.TriggersList) do
-        self:CreateInfoRow(triggersFrame, "• " .. triggerName, "Ativo", i)
-        i = i + 1
-    end
-    
-    -- Últimos triggers acionados
-    local eventsFrame = self:CreateSection(frame, "📋 TRIGGERS RECENTES", 150)
-    self:DisplayLogsInSection(eventsFrame, self.Logs.Triggers, 6)
+function SecurityMenu:CreateTriggersTab(frame)
+    local section = self:CreateSection(frame, "🚨 TRIGGERS", 10)
+    self:DisplayLogs(section, self.Logs.Triggers, 15)
 end
 
-function UltimateMenu:CreateLogsContent(frame)
-    local section = self:CreateSection(frame, "📝 TODOS OS LOGS", 10)
-    self:CreateInfoRow(section, "Total de Logs", tostring(self.Stats.Total), 1)
-    
-    local logsFrame = self:CreateSection(frame, "🔍 LOGS RECENTES", 50)
-    self:DisplayLogsInSection(logsFrame, self.Logs.All, 15)
-end
-
--- Funções auxiliares para UI
-function UltimateMenu:CreateSection(parent, title, yPosition)
+-- Funções auxiliares de UI
+function SecurityMenu:CreateSection(parent, title, yPos)
     local section = Instance.new("Frame")
     section.Size = UDim2.new(1, -20, 0, 0)
-    section.Position = UDim2.new(0, 10, 0, yPosition)
-    section.BackgroundColor3 = self.Theme.Header
+    section.Position = UDim2.new(0, 10, 0, yPos)
+    section.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
     section.BorderSizePixel = 0
     section.AutomaticSize = Enum.AutomaticSize.Y
     section.Parent = parent
@@ -610,7 +408,7 @@ function UltimateMenu:CreateSection(parent, title, yPosition)
         titleLabel.Position = UDim2.new(0, 10, 0, 5)
         titleLabel.BackgroundTransparency = 1
         titleLabel.Text = title
-        titleLabel.TextColor3 = self.Theme.Text
+        titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
         titleLabel.TextXAlignment = Enum.TextXAlignment.Left
         titleLabel.Font = Enum.Font.GothamBold
         titleLabel.TextSize = 14
@@ -620,7 +418,7 @@ function UltimateMenu:CreateSection(parent, title, yPosition)
     return section
 end
 
-function UltimateMenu:CreateStatRow(parent, label, value, color, index)
+function SecurityMenu:CreateStatRow(parent, label, value, index)
     local row = Instance.new("Frame")
     row.Size = UDim2.new(1, -20, 0, 20)
     row.Position = UDim2.new(0, 10, 0, 30 + (index-1)*25)
@@ -632,7 +430,7 @@ function UltimateMenu:CreateStatRow(parent, label, value, color, index)
     labelText.Position = UDim2.new(0, 0, 0, 0)
     labelText.BackgroundTransparency = 1
     labelText.Text = label
-    labelText.TextColor3 = self.Theme.Text
+    labelText.TextColor3 = Color3.fromRGB(200, 200, 200)
     labelText.TextXAlignment = Enum.TextXAlignment.Left
     labelText.Font = Enum.Font.Gotham
     labelText.TextSize = 12
@@ -643,44 +441,14 @@ function UltimateMenu:CreateStatRow(parent, label, value, color, index)
     valueText.Position = UDim2.new(0.7, 0, 0, 0)
     valueText.BackgroundTransparency = 1
     valueText.Text = tostring(value)
-    valueText.TextColor3 = color
+    valueText.TextColor3 = Color3.fromRGB(76, 175, 80)
     valueText.TextXAlignment = Enum.TextXAlignment.Right
     valueText.Font = Enum.Font.GothamBold
     valueText.TextSize = 12
     valueText.Parent = row
 end
 
-function UltimateMenu:CreateInfoRow(parent, label, value, index)
-    local row = Instance.new("Frame")
-    row.Size = UDim2.new(1, -20, 0, 20)
-    row.Position = UDim2.new(0, 10, 0, 30 + (index-1)*25)
-    row.BackgroundTransparency = 1
-    row.Parent = parent
-    
-    local labelText = Instance.new("TextLabel")
-    labelText.Size = UDim2.new(0.6, 0, 1, 0)
-    labelText.Position = UDim2.new(0, 0, 0, 0)
-    labelText.BackgroundTransparency = 1
-    labelText.Text = label
-    labelText.TextColor3 = self.Theme.TextSecondary
-    labelText.TextXAlignment = Enum.TextXAlignment.Left
-    labelText.Font = Enum.Font.Gotham
-    labelText.TextSize = 11
-    labelText.Parent = row
-    
-    local valueText = Instance.new("TextLabel")
-    valueText.Size = UDim2.new(0.4, 0, 1, 0)
-    valueText.Position = UDim2.new(0.6, 0, 0, 0)
-    valueText.BackgroundTransparency = 1
-    valueText.Text = value
-    valueText.TextColor3 = self.Theme.Success
-    valueText.TextXAlignment = Enum.TextXAlignment.Right
-    valueText.Font = Enum.Font.GothamBold
-    valueText.TextSize = 11
-    valueText.Parent = row
-end
-
-function UltimateMenu:DisplayLogsInSection(section, logs, maxLogs)
+function SecurityMenu:DisplayLogs(section, logs, maxLogs)
     local recentLogs = {}
     for i = math.max(1, #logs - maxLogs + 1), #logs do
         table.insert(recentLogs, logs[i])
@@ -691,50 +459,43 @@ function UltimateMenu:DisplayLogsInSection(section, logs, maxLogs)
     end
 end
 
-function UltimateMenu:CreateLogRow(parent, log, index)
+function SecurityMenu:CreateLogRow(parent, log, index)
     local row = Instance.new("Frame")
-    row.Size = UDim2.new(1, -20, 0, 30)
-    row.Position = UDim2.new(0, 10, 0, 30 + (index-1)*35)
-    row.BackgroundColor3 = self.Theme.Tab
+    row.Size = UDim2.new(1, -20, 0, 25)
+    row.Position = UDim2.new(0, 10, 0, 30 + (index-1)*30)
+    row.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
     row.BorderSizePixel = 0
     row.Parent = parent
     
     local timeLabel = Instance.new("TextLabel")
-    timeLabel.Size = UDim2.new(0, 50, 0, 15)
-    timeLabel.Position = UDim2.new(0, 5, 0, 2)
+    timeLabel.Size = UDim2.new(0, 50, 1, 0)
+    timeLabel.Position = UDim2.new(0, 5, 0, 0)
     timeLabel.BackgroundTransparency = 1
     timeLabel.Text = log.Time
-    timeLabel.TextColor3 = self.Theme.TextSecondary
+    timeLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
     timeLabel.TextXAlignment = Enum.TextXAlignment.Left
     timeLabel.Font = Enum.Font.Gotham
     timeLabel.TextSize = 9
     timeLabel.Parent = row
     
-    local catLabel = Instance.new("TextLabel")
-    catLabel.Size = UDim2.new(0, 80, 0, 15)
-    catLabel.Position = UDim2.new(0, 60, 0, 2)
-    catLabel.BackgroundTransparency = 1
-    catLabel.Text = "[" .. log.Category .. "]"
-    catLabel.TextColor3 = self.Theme.TextSecondary
-    catLabel.TextXAlignment = Enum.TextXAlignment.Left
-    catLabel.Font = Enum.Font.Gotham
-    catLabel.TextSize = 9
-    catLabel.Parent = row
-    
     local msgLabel = Instance.new("TextLabel")
-    msgLabel.Size = UDim2.new(1, -150, 0, 20)
-    msgLabel.Position = UDim2.new(0, 145, 0, 5)
+    msgLabel.Size = UDim2.new(1, -60, 1, 0)
+    msgLabel.Position = UDim2.new(0, 60, 0, 0)
     msgLabel.BackgroundTransparency = 1
     msgLabel.Text = log.Message
-    msgLabel.TextColor3 = self.Theme.Text
+    msgLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     msgLabel.TextXAlignment = Enum.TextXAlignment.Left
     msgLabel.Font = Enum.Font.Gotham
-    msgLabel.TextSize = 11
+    msgLabel.TextSize = 10
     msgLabel.TextTruncate = Enum.TextTruncate.AtEnd
     msgLabel.Parent = row
 end
 
-function UltimateMenu:ClearAllLogs()
+function SecurityMenu:UpdateDisplay()
+    self:UpdateTabContent(self.CurrentTab)
+end
+
+function SecurityMenu:ClearLogs()
     for category, _ in pairs(self.Logs) do
         self.Logs[category] = {}
     end
@@ -743,94 +504,83 @@ function UltimateMenu:ClearAllLogs()
         self.Stats[stat] = 0
     end
     
-    self:AddLog("System", "🧹 Todos os logs foram limpos")
+    self:Log("System", "Logs limpos!")
+    self:UpdateDisplay()
 end
 
-function UltimateMenu:ToggleMenu()
+function SecurityMenu:ToggleMenu()
     self.IsOpen = not self.IsOpen
     self.MainFrame.Visible = self.IsOpen
     
     if self.IsOpen then
-        self:UpdateCurrentTab()
+        self:UpdateDisplay()
     end
 end
 
 -- Keybind
-function UltimateMenu:SetupKeybind()
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if not gameProcessed and input.KeyCode == self.OpenKey then
+function SecurityMenu:SetupKeybind()
+    UserInputService.InputBegan:Connect(function(input, processed)
+        if not processed and input.KeyCode == self.OpenKey then
             self:ToggleMenu()
         end
     end)
 end
 
 -- Triggers de Exemplo
-function UltimateMenu:SetupExampleTriggers()
+function SecurityMenu:SetupTriggers()
     -- Trigger para movimento rápido
     self:AddTrigger("MovimentoRapido",
-        function(category, logEntry)
-            return category == "Character" 
-                and logEntry.Data 
-                and logEntry.Data.Distance 
-                and logEntry.Data.Distance > 30
+        function(category, message)
+            return category == "Character" and message:find("Movimento:") and tonumber(message:match("%d+")) > 20
         end,
-        function(logEntry)
-            -- Ação customizada pode ser adicionada aqui
+        function(message)
+            -- Ação quando trigger é acionado
         end
     )
     
     -- Trigger para muitos RemoteEvents
-    self:AddTrigger("SpamRemoteEvents",
-        function(category, logEntry)
-            if category == "RemoteEvents" then
-                -- Verificar se há muitos eventos em pouco tempo
-                local recentCount = 0
-                local now = tick()
-                for _, log in ipairs(self.Logs.RemoteEvents) do
-                    if now - log.Timestamp < 2 then -- Últimos 2 segundos
-                        recentCount = recentCount + 1
-                    end
-                end
-                return recentCount > 5
-            end
-            return false
+    self:AddTrigger("MuitosRemotes",
+        function(category, message)
+            return category == "Remote" and self.Stats.Remote > 10
         end,
-        function(logEntry)
-            -- Ação para spam detection
+        function(message)
+            -- Ação quando trigger é acionado
         end
     )
 end
 
--- Inicialização
-function UltimateMenu:Init()
-    self:AddLog("System", "🚀 Iniciando Ultimate Security Menu...")
+-- Inicialização SEGURA
+function SecurityMenu:Init()
+    local success, err = pcall(function()
+        self:CreateUI()
+        self:SetupKeybind()
+        self:SetupTriggers()
+        
+        -- Iniciar monitoramentos
+        self:MonitorRemoteEvents()
+        self:MonitorCharacter()
+        self:MonitorInputs()
+        self:MonitorNetwork()
+        
+        self:Log("System", "✅ SECURITY MENU PRONTO! Pressione RightShift")
+        return true
+    end)
     
-    self:CreateUI()
-    self:SetupKeybind()
-    self:SetupExampleTriggers()
-    
-    -- Iniciar monitoramentos com delays
-    task.wait(2)
-    self:MonitorRemoteEvents()
-    task.wait(1)
-    self:MonitorCharacter()
-    task.wait(1)
-    self:MonitorInputs()
-    task.wait(1)
-    self:MonitorNetwork()
-    
-    self:AddLog("System", "✅ ULTIMATE MENU PRONTO! Pressione F5")
+    if not success then
+        warn("SecurityMenu Error: " .. tostring(err))
+        return false
+    end
     
     return true
 end
 
--- Iniciar automaticamente
+-- INICIAR AUTOMATICAMENTE
 task.spawn(function()
-    task.wait(3)
-    UltimateMenu:Init()
+    task.wait(2) -- Esperar o jogo carregar
+    SecurityMenu:Init()
 end)
 
--- Tornar global
-getgenv().UltimateMenu = UltimateMenu
+-- Tornar global para acesso
+getgenv().SecurityMenu = SecurityMenu
 
-return UltimateMenu
+return SecurityMenu
