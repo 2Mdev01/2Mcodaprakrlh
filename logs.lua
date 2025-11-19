@@ -198,31 +198,53 @@ function ShakaLogger:CaptureEvent(remote, eventType, args)
 end
 
 function ShakaLogger:HookRemotes()
-    if not hookmetamethod or not getnamecallmethod or not newcclosure then
-        warn("[SHAKA] ❌ Executor não suporta hook!")
+    -- Verificar se o executor suporta hooks
+    if not hookmetamethod then
+        warn("[SHAKA] ❌ hookmetamethod não disponível!")
+        self:AddLog("System", "❌ Executor não suporta hooks")
         return false
     end
     
-    local success = SafeCall(function()
+    if not getnamecallmethod then
+        warn("[SHAKA] ❌ getnamecallmethod não disponível!")
+        self:AddLog("System", "❌ Executor não suporta getnamecallmethod")
+        return false
+    end
+    
+    if not newcclosure then
+        warn("[SHAKA] ❌ newcclosure não disponível!")
+        self:AddLog("System", "❌ Executor não suporta newcclosure")
+        return false
+    end
+    
+    local success, err = pcall(function()
         local oldNamecall
         oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
             local method = getnamecallmethod()
             local args = {...}
             
-            if typeof(self) == "Instance" and 
-               (method == "FireServer" or method == "InvokeServer") then
+            -- Verificar se é um Remote
+            if typeof(self) == "Instance" then
+                local isFireServer = method == "FireServer"
+                local isInvokeServer = method == "InvokeServer"
                 
-                local path = GetRemotePath(self)
-                
-                -- Verificar bloqueio
-                if ShakaLogger:IsBlocked(path) then
-                    return method == "InvokeServer" and nil or nil
-                end
-                
-                -- Capturar
-                if State.Capture.Remote then
-                    local eventType = self:IsA("RemoteEvent") and "RemoteEvent" or "RemoteFunction"
-                    ShakaLogger:CaptureEvent(self, eventType, args)
+                if isFireServer or isInvokeServer then
+                    local path = self:GetFullName()
+                    
+                    -- Verificar bloqueio
+                    if State.BlockedPaths[path] then
+                        return isInvokeServer and nil or nil
+                    end
+                    
+                    -- Capturar evento
+                    if State.Capture.Remote then
+                        local eventType = self:IsA("RemoteEvent") and "RemoteEvent" or "RemoteFunction"
+                        
+                        -- Usar pcall para evitar crash
+                        pcall(function()
+                            ShakaLogger:CaptureEvent(self, eventType, args)
+                        end)
+                    end
                 end
             end
             
@@ -232,9 +254,11 @@ function ShakaLogger:HookRemotes()
     
     if success then
         self:AddLog("System", "✅ Hook instalado!")
+        print("[SHAKA] ✅ Hook de remotes ativo")
         return true
     else
-        self:AddLog("System", "❌ Falha no hook!")
+        warn("[SHAKA] ❌ Erro ao instalar hook:", err)
+        self:AddLog("System", "❌ Erro no hook: " .. tostring(err))
         return false
     end
 end
