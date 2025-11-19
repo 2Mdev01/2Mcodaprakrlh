@@ -1,1113 +1,621 @@
--- SECURITY MENU AVANÇADO v2.0
--- Sistema completo de logs, captura de eventos e replay
+-- SECURITY MENU v3.0 - DELTA EXECUTOR COMPATIBLE
+-- Sistema de captura REAL de eventos com hooks profundos
 -- APENAS para pentest autorizado
 
 local SecurityMenu = {}
+
+-- Services
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
+local StarterGui = game:GetService("StarterGui")
 
 -- Configurações
 SecurityMenu.OpenKey = Enum.KeyCode.F
 SecurityMenu.IsOpen = false
-SecurityMenu.CurrentTab = "Dashboard"
-SecurityMenu.IsInitialized = false
+SecurityMenu.CurrentTab = "Replay"
 
--- Sistema de Logs Melhorado
-SecurityMenu.Logs = {
-    All = {},
-    Remote = {},
-    Character = {},
-    Network = {},
-    Input = {},
-    System = {},
-    Custom = {}
-}
-
-SecurityMenu.Stats = {
-    Total = 0,
-    Remote = 0,
-    Character = 0,
-    Network = 0,
-    Input = 0,
-    System = 0,
-    Custom = 0
-}
-
--- Sistema de Captura de Eventos (para replay)
+-- Dados
 SecurityMenu.CapturedEvents = {}
-SecurityMenu.EventHistory = {}
-SecurityMenu.MonitoredRemotes = {}
-SecurityMenu.RemoteConnections = {}
-
--- Sistema de Filtros
-SecurityMenu.Filters = {
-    RemoteFilter = "",
-    ShowOnlyImportant = false,
-    MaxLogsPerCategory = 100
-}
+SecurityMenu.Logs = {}
+SecurityMenu.Stats = {Total = 0, Remote = 0, Captured = 0}
+SecurityMenu.HookedRemotes = {}
 
 --═══════════════════════════════════════════════════════════
--- SISTEMA DE LOGGING AVANÇADO
+-- SISTEMA DE LOG SIMPLES
 --═══════════════════════════════════════════════════════════
 
-function SecurityMenu:Log(category, message, data)
-    if not self.Logs[category] then
-        self.Logs[category] = {}
-    end
-    
-    local logEntry = {
+function SecurityMenu:AddLog(message, data)
+    local log = {
         Time = os.date("%H:%M:%S"),
-        Timestamp = tick(),
-        Category = category,
         Message = message,
-        Data = data or {},
-        ID = #self.Logs.All + 1
+        Data = data or {}
     }
     
-    -- Adicionar aos logs
-    table.insert(self.Logs.All, 1, logEntry)
-    table.insert(self.Logs[category], 1, logEntry)
-    
-    -- Limitar tamanho dos logs
-    if #self.Logs.All > 1000 then
-        table.remove(self.Logs.All, #self.Logs.All)
+    table.insert(self.Logs, 1, log)
+    if #self.Logs > 100 then
+        table.remove(self.Logs)
     end
     
-    if #self.Logs[category] > self.Filters.MaxLogsPerCategory then
-        table.remove(self.Logs[category], #self.Logs[category])
-    end
-    
-    -- Atualizar estatísticas
     self.Stats.Total = self.Stats.Total + 1
-    self.Stats[category] = (self.Stats[category] or 0) + 1
+    print("[SecurityMenu]", message)
     
-    -- Print detalhado no console
-    print(string.format("[%s] [%s] %s", logEntry.Time, category, message))
-    
-    -- Atualizar UI se estiver aberta
-    if self.IsOpen and self.UpdateDisplay then
+    if self.IsOpen then
         task.spawn(function()
-            self:UpdateDisplay()
+            pcall(function() self:RefreshUI() end)
         end)
     end
-    
-    return logEntry
 end
 
 --═══════════════════════════════════════════════════════════
--- SISTEMA DE CAPTURA DE REMOTE EVENTS (PARA REPLAY)
+-- SISTEMA DE CAPTURA DE EVENTOS (核心功能)
 --═══════════════════════════════════════════════════════════
 
-function SecurityMenu:CaptureEvent(remoteName, remoteType, args, remoteObject)
+function SecurityMenu:CaptureRemoteEvent(remote, eventType, args)
     local eventData = {
-        Name = remoteName,
-        Type = remoteType,
-        Arguments = args,
-        RemoteObject = remoteObject,
-        Timestamp = tick(),
+        Name = remote.Name,
+        Type = eventType,
+        Path = remote:GetFullName(),
+        Remote = remote,
+        Args = args,
         Time = os.date("%H:%M:%S"),
-        FullPath = remoteObject:GetFullName(),
+        Timestamp = tick(),
         ID = #self.CapturedEvents + 1
     }
     
+    -- Adicionar à lista
     table.insert(self.CapturedEvents, 1, eventData)
-    table.insert(self.EventHistory, 1, eventData)
     
-    -- Limitar histórico
-    if #self.EventHistory > 200 then
-        table.remove(self.EventHistory, #self.EventHistory)
+    -- Limitar tamanho
+    if #self.CapturedEvents > 50 then
+        table.remove(self.CapturedEvents)
     end
+    
+    self.Stats.Captured = #self.CapturedEvents
+    self.Stats.Remote = self.Stats.Remote + 1
+    
+    -- Log detalhado
+    local argsStr = "{"
+    for i, arg in ipairs(args) do
+        if type(arg) == "string" then
+            argsStr = argsStr .. '"' .. tostring(arg) .. '"'
+        else
+            argsStr = argsStr .. tostring(arg)
+        end
+        if i < #args then argsStr = argsStr .. ", " end
+    end
+    argsStr = argsStr .. "}"
+    
+    self:AddLog(string.format("🔵 CAPTURADO: %s [%s] Args: %s", 
+        remote.Name, eventType, argsStr), eventData)
     
     return eventData
 end
 
-function SecurityMenu:ReplayEvent(eventData)
-    if not eventData or not eventData.RemoteObject then
-        self:Log("System", "❌ Evento inválido para replay", {})
-        return false
-    end
+--═══════════════════════════════════════════════════════════
+-- HOOK DE REMOTE EVENTS (MÉTODO AGRESSIVO)
+--═══════════════════════════════════════════════════════════
+
+function SecurityMenu:HookRemote(remote)
+    if self.HookedRemotes[remote] then return end
     
-    local success, err = pcall(function()
-        if eventData.Type == "RemoteEvent" then
-            if eventData.RemoteObject and eventData.RemoteObject:IsA("RemoteEvent") then
-                eventData.RemoteObject:FireServer(unpack(eventData.Arguments))
-                self:Log("Custom", "🔄 REPLAY: " .. eventData.Name, {
-                    Args = eventData.Arguments
-                })
-                return true
-            end
-        elseif eventData.Type == "RemoteFunction" then
-            if eventData.RemoteObject and eventData.RemoteObject:IsA("RemoteFunction") then
-                local result = eventData.RemoteObject:InvokeServer(unpack(eventData.Arguments))
-                self:Log("Custom", "🔄 REPLAY: " .. eventData.Name .. " → " .. tostring(result), {
-                    Args = eventData.Arguments,
-                    Result = result
-                })
-                return true
-            end
+    local remoteName = remote.Name
+    
+    pcall(function()
+        if remote:IsA("RemoteEvent") then
+            -- Método 1: Hook direto (mais compatível)
+            local oldNamecall
+            oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+                local method = getnamecallmethod()
+                local args = {...}
+                
+                if self == remote and method == "FireServer" then
+                    SecurityMenu:CaptureRemoteEvent(remote, "RemoteEvent", args)
+                end
+                
+                return oldNamecall(self, ...)
+            end)
+            
+        elseif remote:IsA("RemoteFunction") then
+            local oldNamecall
+            oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+                local method = getnamecallmethod()
+                local args = {...}
+                
+                if self == remote and method == "InvokeServer" then
+                    SecurityMenu:CaptureRemoteEvent(remote, "RemoteFunction", args)
+                end
+                
+                return oldNamecall(self, ...)
+            end)
         end
+        
+        self.HookedRemotes[remote] = true
+        self:AddLog("✅ Hook instalado: " .. remoteName)
     end)
-    
-    if not success then
-        self:Log("System", "❌ Erro no replay: " .. tostring(err), {})
-        return false
-    end
-    
-    return true
 end
 
-function SecurityMenu:ReplayEventMultiple(eventData, times)
+-- Hook alternativo usando __index
+function SecurityMenu:HookAllRemotesAlternative()
+    local oldNamecall
+    oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+        
+        -- Capturar FireServer
+        if method == "FireServer" and typeof(self) == "Instance" then
+            if self:IsA("RemoteEvent") then
+                task.spawn(function()
+                    SecurityMenu:CaptureRemoteEvent(self, "RemoteEvent", args)
+                end)
+            end
+        end
+        
+        -- Capturar InvokeServer
+        if method == "InvokeServer" and typeof(self) == "Instance" then
+            if self:IsA("RemoteFunction") then
+                task.spawn(function()
+                    SecurityMenu:CaptureRemoteEvent(self, "RemoteFunction", args)
+                end)
+            end
+        end
+        
+        return oldNamecall(self, ...)
+    end))
+    
+    self:AddLog("✅ Hook global de __namecall instalado!")
+end
+
+--═══════════════════════════════════════════════════════════
+-- SISTEMA DE REPLAY
+--═══════════════════════════════════════════════════════════
+
+function SecurityMenu:ReplayEvent(eventData, times)
     times = times or 1
     local successCount = 0
     
     for i = 1, times do
-        if self:ReplayEvent(eventData) then
+        local success = pcall(function()
+            if eventData.Type == "RemoteEvent" then
+                eventData.Remote:FireServer(unpack(eventData.Args))
+            elseif eventData.Type == "RemoteFunction" then
+                eventData.Remote:InvokeServer(unpack(eventData.Args))
+            end
+        end)
+        
+        if success then
             successCount = successCount + 1
         end
-        task.wait(0.1) -- Delay entre replays
+        
+        if times > 1 then
+            task.wait(0.05)
+        end
     end
     
-    self:Log("Custom", string.format("🔄 Replay concluído: %d/%d sucessos", successCount, times), {})
+    self:AddLog(string.format("🔄 REPLAY: %s [%dx] - %d sucesso(s)", 
+        eventData.Name, times, successCount))
+    
     return successCount
 end
 
+function SecurityMenu:StartLooping(eventData)
+    if eventData.IsLooping then
+        eventData.IsLooping = false
+        self:AddLog("⏹️ Loop parado: " .. eventData.Name)
+        return
+    end
+    
+    eventData.IsLooping = true
+    self:AddLog("🔁 Loop iniciado: " .. eventData.Name)
+    
+    task.spawn(function()
+        while eventData.IsLooping do
+            pcall(function()
+                if eventData.Type == "RemoteEvent" then
+                    eventData.Remote:FireServer(unpack(eventData.Args))
+                elseif eventData.Type == "RemoteFunction" then
+                    eventData.Remote:InvokeServer(unpack(eventData.Args))
+                end
+            end)
+            task.wait(0.5)
+        end
+    end)
+end
+
 --═══════════════════════════════════════════════════════════
--- MONITORAMENTO DE REMOTE EVENTS AVANÇADO
+-- SCANNER DE REMOTES
 --═══════════════════════════════════════════════════════════
 
-function SecurityMenu:MonitorRemoteEvents()
-    self:Log("System", "🔍 Iniciando monitoramento avançado de RemoteEvents...", {})
+function SecurityMenu:ScanAndHookRemotes()
+    self:AddLog("🔍 Escaneando remotes...")
     
-    local function hookRemote(remote)
-        if self.MonitoredRemotes[remote] then return end
-        
-        local remoteName = remote.Name
-        local remotePath = remote:GetFullName()
-        
-        if remote:IsA("RemoteEvent") then
-            -- Hook RemoteEvent.FireServer
-            local oldFireServer = remote.FireServer
-            
-            remote.FireServer = newcclosure(function(self, ...)
-                local args = {...}
-                
-                -- Capturar evento
-                local eventData = SecurityMenu:CaptureEvent(remoteName, "RemoteEvent", args, remote)
-                
-                -- Log detalhado
-                local argsStr = HttpService:JSONEncode(args)
-                SecurityMenu:Log("Remote", "📡 " .. remoteName .. " | Args: " .. argsStr, {
-                    Remote = remoteName,
-                    Path = remotePath,
-                    Args = args,
-                    EventData = eventData
-                })
-                
-                -- Chamar função original
-                return oldFireServer(self, ...)
-            end)
-            
-        elseif remote:IsA("RemoteFunction") then
-            -- Hook RemoteFunction.InvokeServer
-            local oldInvokeServer = remote.InvokeServer
-            
-            remote.InvokeServer = newcclosure(function(self, ...)
-                local args = {...}
-                
-                -- Chamar função original e capturar resultado
-                local result = oldInvokeServer(self, ...)
-                
-                -- Capturar evento
-                local eventData = SecurityMenu:CaptureEvent(remoteName, "RemoteFunction", args, remote)
-                eventData.Result = result
-                
-                -- Log detalhado
-                local argsStr = HttpService:JSONEncode(args)
-                local resultStr = tostring(result)
-                SecurityMenu:Log("Remote", "🔧 " .. remoteName .. " | Args: " .. argsStr .. " → " .. resultStr, {
-                    Remote = remoteName,
-                    Path = remotePath,
-                    Args = args,
-                    Result = result,
-                    EventData = eventData
-                })
-                
-                return result
-            end)
-        end
-        
-        self.MonitoredRemotes[remote] = true
-    end
+    local remoteCount = 0
     
-    -- Monitorar todos os remotes existentes
-    local function scanForRemotes(parent)
-        for _, child in ipairs(parent:GetDescendants()) do
-            if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") then
-                pcall(hookRemote, child)
-            end
+    -- Escanear ReplicatedStorage
+    for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
+        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+            self:HookRemote(obj)
+            remoteCount = remoteCount + 1
         end
     end
     
-    -- Scan inicial
-    pcall(scanForRemotes, ReplicatedStorage)
-    pcall(scanForRemotes, game:GetService("Workspace"))
+    -- Escanear Workspace
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+            self:HookRemote(obj)
+            remoteCount = remoteCount + 1
+        end
+    end
     
     -- Monitorar novos remotes
-    local function onChildAdded(child)
-        if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") then
+    local function onDescendantAdded(obj)
+        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
             task.wait(0.1)
-            pcall(hookRemote, child)
-            SecurityMenu:Log("System", "✨ Novo remote detectado: " .. child.Name, {})
+            self:HookRemote(obj)
         end
     end
     
-    ReplicatedStorage.DescendantAdded:Connect(onChildAdded)
-    game:GetService("Workspace").DescendantAdded:Connect(onChildAdded)
+    ReplicatedStorage.DescendantAdded:Connect(onDescendantAdded)
+    workspace.DescendantAdded:Connect(onDescendantAdded)
     
-    self:Log("System", "✅ Monitoramento de RemoteEvents ativo!", {})
+    self:AddLog(string.format("✅ %d remotes encontrados e hooked!", remoteCount))
 end
 
 --═══════════════════════════════════════════════════════════
--- MONITORAMENTO DE CHARACTER
---═══════════════════════════════════════════════════════════
-
-function SecurityMenu:MonitorCharacter()
-    local lastPos = nil
-    local lastHealth = nil
-    
-    RunService.Heartbeat:Connect(function()
-        local player = Players.LocalPlayer
-        if not player or not player.Character then return end
-        
-        local root = player.Character:FindFirstChild("HumanoidRootPart")
-        local humanoid = player.Character:FindFirstChild("Humanoid")
-        
-        -- Monitorar posição
-        if root then
-            local currentPos = root.Position
-            if lastPos then
-                local dist = (currentPos - lastPos).Magnitude
-                if dist > 5 then
-                    self:Log("Character", string.format("🎯 Movimento: %.1f studs | Pos: %.1f, %.1f, %.1f", 
-                        dist, currentPos.X, currentPos.Y, currentPos.Z), {
-                        Distance = dist,
-                        Position = currentPos
-                    })
-                end
-            end
-            lastPos = currentPos
-        end
-        
-        -- Monitorar saúde
-        if humanoid then
-            local currentHealth = humanoid.Health
-            if lastHealth and currentHealth ~= lastHealth then
-                local change = currentHealth - lastHealth
-                local emoji = change > 0 and "💚" or "❤️"
-                self:Log("Character", string.format("%s Saúde: %.1f (Δ%.1f)", 
-                    emoji, currentHealth, change), {
-                    Health = currentHealth,
-                    Change = change
-                })
-            end
-            lastHealth = currentHealth
-        end
-    end)
-    
-    self:Log("System", "✅ Monitoramento de Character ativo!", {})
-end
-
---═══════════════════════════════════════════════════════════
--- MONITORAMENTO DE INPUTS
---═══════════════════════════════════════════════════════════
-
-function SecurityMenu:MonitorInputs()
-    UserInputService.InputBegan:Connect(function(input, processed)
-        if processed then return end
-        
-        if input.UserInputType == Enum.UserInputType.Keyboard then
-            self:Log("Input", "⌨️ Tecla: " .. input.KeyCode.Name, {
-                KeyCode = input.KeyCode,
-                Processed = processed
-            })
-        elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
-            self:Log("Input", "🖱️ Clique Esquerdo", {})
-        elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
-            self:Log("Input", "🖱️ Clique Direito", {})
-        end
-    end)
-    
-    self:Log("System", "✅ Monitoramento de Inputs ativo!", {})
-end
-
---═══════════════════════════════════════════════════════════
--- MONITORAMENTO DE NETWORK
---═══════════════════════════════════════════════════════════
-
-function SecurityMenu:MonitorNetwork()
-    -- Monitorar jogadores
-    Players.PlayerAdded:Connect(function(player)
-        self:Log("Network", "👤 " .. player.Name .. " entrou no servidor", {
-            Player = player.Name,
-            UserId = player.UserId
-        })
-    end)
-    
-    Players.PlayerRemoving:Connect(function(player)
-        self:Log("Network", "👋 " .. player.Name .. " saiu do servidor", {
-            Player = player.Name,
-            UserId = player.UserId
-        })
-    end)
-    
-    -- Log de jogadores atuais
-    for _, player in ipairs(Players:GetPlayers()) do
-        self:Log("Network", "👥 Jogador atual: " .. player.Name, {
-            Player = player.Name,
-            UserId = player.UserId
-        })
-    end
-    
-    self:Log("System", "✅ Monitoramento de Network ativo!", {})
-end
-
---═══════════════════════════════════════════════════════════
--- INTERFACE DO USUÁRIO
+-- INTERFACE DO USUÁRIO (SIMPLIFICADA)
 --═══════════════════════════════════════════════════════════
 
 function SecurityMenu:CreateUI()
-    if self.ScreenGui then
-        pcall(function() self.ScreenGui:Destroy() end)
+    -- Limpar UI antiga
+    pcall(function()
+        if game:GetService("CoreGui"):FindFirstChild("SecurityMenuV3") then
+            game:GetService("CoreGui"):FindFirstChild("SecurityMenuV3"):Destroy()
+        end
+    end)
+    
+    -- Criar ScreenGui
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "SecurityMenuV3"
+    gui.ResetOnSpawn = false
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    
+    pcall(function()
+        gui.Parent = game:GetService("CoreGui")
+    end)
+    
+    if not gui.Parent then
+        gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
     end
     
-    self.ScreenGui = Instance.new("ScreenGui")
-    self.ScreenGui.Parent = game:GetService("CoreGui")
-    self.ScreenGui.Name = "SecurityMenuAdvanced"
-    self.ScreenGui.ResetOnSpawn = false
-    self.ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    self.ScreenGui = gui
     
-    -- Tema
-    local Theme = {
-        Background = Color3.fromRGB(20, 20, 25),
-        Header = Color3.fromRGB(35, 35, 45),
-        Tab = Color3.fromRGB(45, 45, 55),
-        TabActive = Color3.fromRGB(70, 130, 255),
-        Text = Color3.fromRGB(255, 255, 255),
-        TextSecondary = Color3.fromRGB(160, 160, 170),
-        Success = Color3.fromRGB(76, 175, 80),
-        Warning = Color3.fromRGB(255, 193, 7),
-        Error = Color3.fromRGB(244, 67, 54),
-        Accent = Color3.fromRGB(0, 188, 212)
+    -- Cores
+    local c = {
+        bg = Color3.fromRGB(25, 25, 30),
+        header = Color3.fromRGB(35, 35, 45),
+        button = Color3.fromRGB(50, 50, 60),
+        accent = Color3.fromRGB(70, 130, 255),
+        success = Color3.fromRGB(76, 175, 80),
+        danger = Color3.fromRGB(244, 67, 54),
+        warning = Color3.fromRGB(255, 152, 0),
+        text = Color3.fromRGB(255, 255, 255),
+        text2 = Color3.fromRGB(180, 180, 190)
     }
+    self.Colors = c
     
-    self.Theme = Theme
+    -- Main Frame
+    local main = Instance.new("Frame")
+    main.Name = "Main"
+    main.Size = UDim2.new(0, 700, 0, 500)
+    main.Position = UDim2.new(0.5, -350, 0.5, -250)
+    main.BackgroundColor3 = c.bg
+    main.BorderSizePixel = 0
+    main.Visible = false
+    main.Parent = gui
     
-    -- Frame Principal
-    local MainFrame = Instance.new("Frame")
-    MainFrame.Name = "MainFrame"
-    MainFrame.Size = UDim2.new(0, 800, 0, 550)
-    MainFrame.Position = UDim2.new(0.5, -400, 0.5, -275)
-    MainFrame.BackgroundColor3 = Theme.Background
-    MainFrame.BorderSizePixel = 0
-    MainFrame.Visible = false
-    MainFrame.Parent = self.ScreenGui
+    self.MainFrame = main
     
-    -- Sombra
-    local Shadow = Instance.new("ImageLabel")
-    Shadow.Name = "Shadow"
-    Shadow.Size = UDim2.new(1, 30, 1, 30)
-    Shadow.Position = UDim2.new(0, -15, 0, -15)
-    Shadow.BackgroundTransparency = 1
-    Shadow.Image = "rbxasset://textures/ui/GUI dropshadow.png"
-    Shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
-    Shadow.ImageTransparency = 0.5
-    Shadow.ScaleType = Enum.ScaleType.Slice
-    Shadow.SliceCenter = Rect.new(50, 50, 100, 100)
-    Shadow.ZIndex = 0
-    Shadow.Parent = MainFrame
+    -- Arredondar cantos
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = main
     
     -- Header
-    local Header = Instance.new("Frame")
-    Header.Name = "Header"
-    Header.Size = UDim2.new(1, 0, 0, 45)
-    Header.BackgroundColor3 = Theme.Header
-    Header.BorderSizePixel = 0
-    Header.Parent = MainFrame
+    local header = Instance.new("Frame")
+    header.Size = UDim2.new(1, 0, 0, 40)
+    header.BackgroundColor3 = c.header
+    header.BorderSizePixel = 0
+    header.Parent = main
     
-    local Title = Instance.new("TextLabel")
-    Title.Name = "Title"
-    Title.Size = UDim2.new(1, -120, 1, 0)
-    Title.Position = UDim2.new(0, 15, 0, 0)
-    Title.BackgroundTransparency = 1
-    Title.Text = "🔒 SECURITY MENU v2.0 - Advanced Pentest Tool"
-    Title.TextColor3 = Theme.Text
-    Title.TextXAlignment = Enum.TextXAlignment.Left
-    Title.Font = Enum.Font.GothamBold
-    Title.TextSize = 16
-    Title.Parent = Header
+    local headerCorner = Instance.new("UICorner")
+    headerCorner.CornerRadius = UDim.new(0, 8)
+    headerCorner.Parent = header
     
-    local CloseBtn = Instance.new("TextButton")
-    CloseBtn.Name = "CloseBtn"
-    CloseBtn.Size = UDim2.new(0, 100, 0, 30)
-    CloseBtn.Position = UDim2.new(1, -110, 0.5, -15)
-    CloseBtn.BackgroundColor3 = Theme.Error
-    CloseBtn.BorderSizePixel = 0
-    CloseBtn.Text = "✖ FECHAR [F]"
-    CloseBtn.TextColor3 = Theme.Text
-    CloseBtn.Font = Enum.Font.GothamBold
-    CloseBtn.TextSize = 12
-    CloseBtn.Parent = Header
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -100, 1, 0)
+    title.Position = UDim2.new(0, 15, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text = "🔒 SECURITY MENU v3.0 - EVENT REPLAY"
+    title.TextColor3 = c.text
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 14
+    title.Parent = header
     
-    CloseBtn.MouseButton1Click:Connect(function()
-        self:ToggleMenu()
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 80, 0, 25)
+    closeBtn.Position = UDim2.new(1, -90, 0.5, -12)
+    closeBtn.BackgroundColor3 = c.danger
+    closeBtn.Text = "✖ [F]"
+    closeBtn.TextColor3 = c.text
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.TextSize = 12
+    closeBtn.BorderSizePixel = 0
+    closeBtn.Parent = header
+    
+    local closeBtnCorner = Instance.new("UICorner")
+    closeBtnCorner.CornerRadius = UDim.new(0, 4)
+    closeBtnCorner.Parent = closeBtn
+    
+    closeBtn.MouseButton1Click:Connect(function()
+        self:Toggle()
     end)
     
-    -- Tabs Container
-    local TabContainer = Instance.new("Frame")
-    TabContainer.Name = "TabContainer"
-    TabContainer.Size = UDim2.new(1, 0, 0, 40)
-    TabContainer.Position = UDim2.new(0, 0, 0, 45)
-    TabContainer.BackgroundColor3 = Theme.Tab
-    TabContainer.BorderSizePixel = 0
-    TabContainer.Parent = MainFrame
+    -- Stats Bar
+    local statsBar = Instance.new("Frame")
+    statsBar.Size = UDim2.new(1, 0, 0, 35)
+    statsBar.Position = UDim2.new(0, 0, 0, 40)
+    statsBar.BackgroundColor3 = c.button
+    statsBar.BorderSizePixel = 0
+    statsBar.Parent = main
     
-    local TabLayout = Instance.new("UIListLayout")
-    TabLayout.FillDirection = Enum.FillDirection.Horizontal
-    TabLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    TabLayout.Padding = UDim.new(0, 0)
-    TabLayout.Parent = TabContainer
+    self.StatsLabel = Instance.new("TextLabel")
+    self.StatsLabel.Size = UDim2.new(1, -20, 1, 0)
+    self.StatsLabel.Position = UDim2.new(0, 10, 0, 0)
+    self.StatsLabel.BackgroundTransparency = 1
+    self.StatsLabel.Text = "📊 Total: 0 | 🔵 Capturados: 0 | 📡 Remotes: 0"
+    self.StatsLabel.TextColor3 = c.text2
+    self.StatsLabel.TextXAlignment = Enum.TextXAlignment.Left
+    self.StatsLabel.Font = Enum.Font.Gotham
+    self.StatsLabel.TextSize = 11
+    self.StatsLabel.Parent = statsBar
     
-    -- Criar Tabs
-    local Tabs = {
-        {Name = "Dashboard", Icon = "📊"},
-        {Name = "Remote", Icon = "📡"},
-        {Name = "Replay", Icon = "🔄"},
-        {Name = "Character", Icon = "🎯"},
-        {Name = "Network", Icon = "🌐"},
-        {Name = "Input", Icon = "⌨️"},
-        {Name = "Logs", Icon = "📝"}
-    }
+    -- Content Area
+    local content = Instance.new("ScrollingFrame")
+    content.Size = UDim2.new(1, -20, 1, -95)
+    content.Position = UDim2.new(0, 10, 0, 80)
+    content.BackgroundTransparency = 1
+    content.BorderSizePixel = 0
+    content.ScrollBarThickness = 6
+    content.ScrollBarImageColor3 = c.accent
+    content.CanvasSize = UDim2.new(0, 0, 0, 0)
+    content.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    content.Parent = main
     
-    self.TabButtons = {}
-    
-    for i, tab in ipairs(Tabs) do
-        local TabButton = Instance.new("TextButton")
-        TabButton.Name = tab.Name .. "Tab"
-        TabButton.Size = UDim2.new(0, 114, 1, 0)
-        TabButton.BackgroundColor3 = Theme.Tab
-        TabButton.BorderSizePixel = 0
-        TabButton.Text = tab.Icon .. " " .. tab.Name
-        TabButton.TextColor3 = Theme.TextSecondary
-        TabButton.Font = Enum.Font.Gotham
-        TabButton.TextSize = 11
-        TabButton.Parent = TabContainer
-        
-        TabButton.MouseButton1Click:Connect(function()
-            self:SwitchTab(tab.Name)
-        end)
-        
-        self.TabButtons[tab.Name] = TabButton
-    end
-    
-    -- Content Frame
-    local ContentFrame = Instance.new("Frame")
-    ContentFrame.Name = "ContentFrame"
-    ContentFrame.Size = UDim2.new(1, 0, 1, -85)
-    ContentFrame.Position = UDim2.new(0, 0, 0, 85)
-    ContentFrame.BackgroundTransparency = 1
-    ContentFrame.Parent = MainFrame
-    
-    -- Criar frames para cada tab
-    self.ContentFrames = {}
-    
-    for _, tab in ipairs(Tabs) do
-        local Frame = Instance.new("ScrollingFrame")
-        Frame.Name = tab.Name .. "Content"
-        Frame.Size = UDim2.new(1, -10, 1, -10)
-        Frame.Position = UDim2.new(0, 5, 0, 5)
-        Frame.BackgroundTransparency = 1
-        Frame.BorderSizePixel = 0
-        Frame.ScrollBarThickness = 8
-        Frame.ScrollBarImageColor3 = Theme.TabActive
-        Frame.Visible = false
-        Frame.CanvasSize = UDim2.new(0, 0, 0, 0)
-        Frame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-        Frame.Parent = ContentFrame
-        
-        local Layout = Instance.new("UIListLayout")
-        Layout.Padding = UDim.new(0, 8)
-        Layout.SortOrder = Enum.SortOrder.LayoutOrder
-        Layout.Parent = Frame
-        
-        self.ContentFrames[tab.Name] = Frame
-    end
-    
-    self.MainFrame = MainFrame
-    
-    -- Selecionar primeira tab
-    self:SwitchTab("Dashboard")
-    
-    self:Log("System", "✅ Interface criada com sucesso!", {})
-end
-
-function SecurityMenu:SwitchTab(tabName)
-    self.CurrentTab = tabName
-    
-    -- Atualizar botões
-    for name, button in pairs(self.TabButtons) do
-        if name == tabName then
-            button.BackgroundColor3 = self.Theme.TabActive
-            button.TextColor3 = self.Theme.Text
-        else
-            button.BackgroundColor3 = self.Theme.Tab
-            button.TextColor3 = self.Theme.TextSecondary
-        end
-    end
-    
-    -- Mostrar frame correto
-    for name, frame in pairs(self.ContentFrames) do
-        frame.Visible = (name == tabName)
-        
-        if name == tabName then
-            -- Limpar conteúdo anterior
-            for _, child in ipairs(frame:GetChildren()) do
-                if not child:IsA("UIListLayout") then
-                    child:Destroy()
-                end
-            end
-            
-            -- Atualizar conteúdo
-            self:UpdateTabContent(tabName)
-        end
-    end
-end
-
-function SecurityMenu:UpdateTabContent(tabName)
-    local frame = self.ContentFrames[tabName]
-    if not frame then return end
-    
-    if tabName == "Dashboard" then
-        self:CreateDashboard(frame)
-    elseif tabName == "Remote" then
-        self:CreateRemoteTab(frame)
-    elseif tabName == "Replay" then
-        self:CreateReplayTab(frame)
-    elseif tabName == "Character" then
-        self:CreateCharacterTab(frame)
-    elseif tabName == "Network" then
-        self:CreateNetworkTab(frame)
-    elseif tabName == "Input" then
-        self:CreateInputTab(frame)
-    elseif tabName == "Logs" then
-        self:CreateLogsTab(frame)
-    end
-end
-
---═══════════════════════════════════════════════════════════
--- CONTEÚDO DAS TABS
---═══════════════════════════════════════════════════════════
-
-function SecurityMenu:CreateDashboard(frame)
-    -- Estatísticas
-    local statsSection = self:CreateSection(frame, "📊 ESTATÍSTICAS EM TEMPO REAL")
-    
-    local statsData = {
-        {"📝 Total de Eventos", self.Stats.Total, self.Theme.Accent},
-        {"📡 Remote Events", self.Stats.Remote, self.Theme.Success},
-        {"🔄 Eventos Capturados", #self.CapturedEvents, self.Theme.Warning},
-        {"🎯 Character Events", self.Stats.Character, self.Theme.Success},
-        {"🌐 Network Events", self.Stats.Network, self.Theme.Success},
-        {"⌨️ Input Events", self.Stats.Input, self.Theme.Success}
-    }
-    
-    for _, stat in ipairs(statsData) do
-        self:CreateStatCard(statsSection, stat[1], stat[2], stat[3])
-    end
-    
-    -- Controles
-    local controlSection = self:CreateSection(frame, "🛠️ CONTROLES RÁPIDOS")
-    
-    local controls = {
-        {"🧹 Limpar Logs", self.Theme.Warning, function()
-            self:ClearLogs()
-        end},
-        {"🗑️ Limpar Eventos Capturados", self.Theme.Error, function()
-            self.CapturedEvents = {}
-            self:Log("System", "🗑️ Eventos capturados limpos!", {})
-            self:UpdateDisplay()
-        end},
-        {"🔄 Atualizar Tela", self.Theme.Success, function()
-            self:UpdateDisplay()
-        end}
-    }
-    
-    for _, control in ipairs(controls) do
-        self:CreateButton(controlSection, control[1], control[2], control[3])
-    end
-end
-
-function SecurityMenu:CreateRemoteTab(frame)
-    local section = self:CreateSection(frame, "📡 REMOTE EVENTS CAPTURADOS (" .. self.Stats.Remote .. " eventos)")
-    
-    -- Filtro
-    local filterFrame = self:CreateInputField(section, "🔍 Filtrar por nome:", function(text)
-        self.Filters.RemoteFilter = text
-        self:UpdateDisplay()
-    end)
-    
-    -- Logs filtrados
-    local logs = {}
-    for _, log in ipairs(self.Logs.Remote) do
-        if self.Filters.RemoteFilter == "" or 
-           string.find(string.lower(log.Message), string.lower(self.Filters.RemoteFilter)) then
-            table.insert(logs, log)
-        end
-    end
-    
-    self:DisplayLogs(section, logs, 20)
-end
-
-function SecurityMenu:CreateReplayTab(frame)
-    local section = self:CreateSection(frame, "🔄 EVENTOS CAPTURADOS PARA REPLAY (" .. #self.CapturedEvents .. " eventos)")
-    
-    if #self.CapturedEvents == 0 then
-        local emptyLabel = Instance.new("TextLabel")
-        emptyLabel.Size = UDim2.new(1, -20, 0, 100)
-        emptyLabel.BackgroundColor3 = self.Theme.Header
-        emptyLabel.BorderSizePixel = 0
-        emptyLabel.Text = "⚠️ Nenhum evento capturado ainda\n\nInteraja com o jogo para capturar eventos!"
-        emptyLabel.TextColor3 = self.Theme.TextSecondary
-        emptyLabel.TextSize = 14
-        emptyLabel.Font = Enum.Font.Gotham
-        emptyLabel.Parent = section
-        return
-    end
-    
-    -- Mostrar eventos capturados com botões de replay
-    for i, event in ipairs(self.CapturedEvents) do
-        if i > 30 then break end -- Limitar exibição
-        
-        local eventFrame = Instance.new("Frame")
-        eventFrame.Size = UDim2.new(1, -20, 0, 80)
-        eventFrame.BackgroundColor3 = self.Theme.Header
-        eventFrame.BorderSizePixel = 0
-        eventFrame.Parent = section
-        
-        -- Nome do evento
-        local eventName = Instance.new("TextLabel")
-        eventName.Size = UDim2.new(1, -160, 0, 25)
-        eventName.Position = UDim2.new(0, 10, 0, 5)
-        eventName.BackgroundTransparency = 1
-        eventName.Text = "📡 " .. event.Name .. " [" .. event.Type .. "]"
-        eventName.TextColor3 = self.Theme.Text
-        eventName.TextXAlignment = Enum.TextXAlignment.Left
-        eventName.Font = Enum.Font.GothamBold
-        eventName.TextSize = 12
-        eventName.Parent = eventFrame
-        
-        -- Caminho
-        local eventPath = Instance.new("TextLabel")
-        eventPath.Size = UDim2.new(1, -160, 0, 20)
-        eventPath.Position = UDim2.new(0, 10, 0, 28)
-        eventPath.BackgroundTransparency = 1
-        eventPath.Text = "📁 " .. event.FullPath
-        eventPath.TextColor3 = self.Theme.TextSecondary
-        eventPath.TextXAlignment = Enum.TextXAlignment.Left
-        eventPath.Font = Enum.Font.Gotham
-        eventPath.TextSize = 9
-        eventPath.TextTruncate = Enum.TextTruncate.AtEnd
-        eventPath.Parent = eventFrame
-        
-        -- Argumentos
-        local argsText = "Args: " .. HttpService:JSONEncode(event.Arguments)
-        local eventArgs = Instance.new("TextLabel")
-        eventArgs.Size = UDim2.new(1, -160, 0, 20)
-        eventArgs.Position = UDim2.new(0, 10, 0, 50)
-        eventArgs.BackgroundTransparency = 1
-        eventArgs.Text = argsText
-        eventArgs.TextColor3 = self.Theme.Accent
-        eventArgs.TextXAlignment = Enum.TextXAlignment.Left
-        eventArgs.Font = Enum.Font.Code
-        eventArgs.TextSize = 9
-        eventArgs.TextTruncate = Enum.TextTruncate.AtEnd
-        eventArgs.Parent = eventFrame
-        
-        -- Botão Replay 1x
-        local replayBtn = Instance.new("TextButton")
-        replayBtn.Size = UDim2.new(0, 70, 0, 25)
-        replayBtn.Position = UDim2.new(1, -145, 0, 5)
-        replayBtn.BackgroundColor3 = self.Theme.Success
-        replayBtn.BorderSizePixel = 0
-        replayBtn.Text = "▶️ REPLAY"
-        replayBtn.TextColor3 = self.Theme.Text
-        replayBtn.Font = Enum.Font.GothamBold
-        replayBtn.TextSize = 10
-        replayBtn.Parent = eventFrame
-        
-        replayBtn.MouseButton1Click:Connect(function()
-            self:ReplayEvent(event)
-        end)
-        
-        -- Botão Replay 5x
-        local replay5Btn = Instance.new("TextButton")
-        replay5Btn.Size = UDim2.new(0, 70, 0, 25)
-        replay5Btn.Position = UDim2.new(1, -145, 0, 32)
-        replay5Btn.BackgroundColor3 = self.Theme.Warning
-        replay5Btn.BorderSizePixel = 0
-        replay5Btn.Text = "⚡ x5"
-        replay5Btn.TextColor3 = self.Theme.Text
-        replay5Btn.Font = Enum.Font.GothamBold
-        replay5Btn.TextSize = 10
-        replay5Btn.Parent = eventFrame
-        
-        replay5Btn.MouseButton1Click:Connect(function()
-            self:ReplayEventMultiple(event, 5)
-        end)
-        
-        -- Botão Replay 10x
-        local replay10Btn = Instance.new("TextButton")
-        replay10Btn.Size = UDim2.new(0, 70, 0, 25)
-        replay10Btn.Position = UDim2.new(1, -145, 0, 50)
-        replay10Btn.BackgroundColor3 = self.Theme.Error
-        replay10Btn.BorderSizePixel = 0
-        replay10Btn.Text = "🔥 x10"
-        replay10Btn.TextColor3 = self.Theme.Text
-        replay10Btn.Font = Enum.Font.GothamBold
-        replay10Btn.TextSize = 10
-        replay10Btn.Parent = eventFrame
-        
-        replay10Btn.MouseButton1Click:Connect(function()
-            self:ReplayEventMultiple(event, 10)
-        end)
-        
-        -- Botão Custom
-        local customBtn = Instance.new("TextButton")
-        customBtn.Size = UDim2.new(0, 70, 0, 25)
-        customBtn.Position = UDim2.new(1, -72, 0, 5)
-        customBtn.BackgroundColor3 = self.Theme.TabActive
-        customBtn.BorderSizePixel = 0
-        customBtn.Text = "⚙️ CUSTOM"
-        customBtn.TextColor3 = self.Theme.Text
-        customBtn.Font = Enum.Font.GothamBold
-        customBtn.TextSize = 10
-        customBtn.Parent = eventFrame
-        
-        customBtn.MouseButton1Click:Connect(function()
-            -- Criar prompt para quantidade customizada
-            local times = tonumber(prompt("Quantas vezes repetir?", "1"))
-            if times and times > 0 then
-                self:ReplayEventMultiple(event, times)
-            end
-        end)
-        
-        -- Botão Loop
-        local loopBtn = Instance.new("TextButton")
-        loopBtn.Size = UDim2.new(0, 70, 0, 25)
-        loopBtn.Position = UDim2.new(1, -72, 0, 32)
-        loopBtn.BackgroundColor3 = Color3.fromRGB(156, 39, 176)
-        loopBtn.BorderSizePixel = 0
-        loopBtn.Text = "🔁 LOOP"
-        loopBtn.TextColor3 = self.Theme.Text
-        loopBtn.Font = Enum.Font.GothamBold
-        loopBtn.TextSize = 10
-        loopBtn.Parent = eventFrame
-        
-        loopBtn.MouseButton1Click:Connect(function()
-            -- Loop infinito (até clicar novamente)
-            if not event.IsLooping then
-                event.IsLooping = true
-                loopBtn.Text = "⏸️ PARAR"
-                loopBtn.BackgroundColor3 = self.Theme.Error
-                
-                task.spawn(function()
-                    while event.IsLooping do
-                        self:ReplayEvent(event)
-                        task.wait(0.5)
-                    end
-                end)
-            else
-                event.IsLooping = false
-                loopBtn.Text = "🔁 LOOP"
-                loopBtn.BackgroundColor3 = Color3.fromRGB(156, 39, 176)
-            end
-        end)
-        
-        -- Botão Info
-        local infoBtn = Instance.new("TextButton")
-        infoBtn.Size = UDim2.new(0, 70, 0, 25)
-        infoBtn.Position = UDim2.new(1, -72, 0, 50)
-        infoBtn.BackgroundColor3 = self.Theme.Tab
-        infoBtn.BorderSizePixel = 0
-        infoBtn.Text = "ℹ️ INFO"
-        infoBtn.TextColor3 = self.Theme.Text
-        infoBtn.Font = Enum.Font.GothamBold
-        infoBtn.TextSize = 10
-        infoBtn.Parent = eventFrame
-        
-        infoBtn.MouseButton1Click:Connect(function()
-            local info = string.format(
-                "📋 INFORMAÇÕES DO EVENTO\n\n" ..
-                "Nome: %s\n" ..
-                "Tipo: %s\n" ..
-                "Capturado: %s\n" ..
-                "Caminho: %s\n\n" ..
-                "Argumentos:\n%s",
-                event.Name,
-                event.Type,
-                event.Time,
-                event.FullPath,
-                HttpService:JSONEncode(event.Arguments)
-            )
-            self:Log("Custom", info, event)
-        end)
-    end
-end
-
-function SecurityMenu:CreateCharacterTab(frame)
-    local section = self:CreateSection(frame, "🎯 CHARACTER MONITORING (" .. self.Stats.Character .. " eventos)")
-    self:DisplayLogs(section, self.Logs.Character, 25)
-end
-
-function SecurityMenu:CreateNetworkTab(frame)
-    local section = self:CreateSection(frame, "🌐 NETWORK MONITORING (" .. self.Stats.Network .. " eventos)")
-    self:DisplayLogs(section, self.Logs.Network, 25)
-end
-
-function SecurityMenu:CreateInputTab(frame)
-    local section = self:CreateSection(frame, "⌨️ INPUT MONITORING (" .. self.Stats.Input .. " eventos)")
-    self:DisplayLogs(section, self.Logs.Input, 25)
-end
-
-function SecurityMenu:CreateLogsTab(frame)
-    local section = self:CreateSection(frame, "📝 TODOS OS LOGS (" .. self.Stats.Total .. " eventos)")
-    self:DisplayLogs(section, self.Logs.All, 30)
-end
-
---═══════════════════════════════════════════════════════════
--- FUNÇÕES AUXILIARES DE UI
---═══════════════════════════════════════════════════════════
-
-function SecurityMenu:CreateSection(parent, title)
-    local section = Instance.new("Frame")
-    section.Size = UDim2.new(1, -10, 0, 0)
-    section.BackgroundTransparency = 1
-    section.BorderSizePixel = 0
-    section.AutomaticSize = Enum.AutomaticSize.Y
-    section.Parent = parent
+    self.ContentFrame = content
     
     local layout = Instance.new("UIListLayout")
-    layout.Padding = UDim.new(0, 5)
+    layout.Padding = UDim.new(0, 8)
     layout.SortOrder = Enum.SortOrder.LayoutOrder
-    layout.Parent = section
+    layout.Parent = content
     
-    if title then
-        local titleLabel = Instance.new("TextLabel")
-        titleLabel.Size = UDim2.new(1, 0, 0, 30)
-        titleLabel.BackgroundColor3 = self.Theme.Header
-        titleLabel.BorderSizePixel = 0
-        titleLabel.Text = "  " .. title
-        titleLabel.TextColor3 = self.Theme.Text
-        titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-        titleLabel.Font = Enum.Font.GothamBold
-        titleLabel.TextSize = 13
-        titleLabel.Parent = section
+    self:AddLog("✅ Interface criada!")
+end
+
+function SecurityMenu:RefreshUI()
+    if not self.ContentFrame then return end
+    
+    -- Limpar conteúdo
+    for _, child in ipairs(self.ContentFrame:GetChildren()) do
+        if not child:IsA("UIListLayout") then
+            child:Destroy()
+        end
     end
     
-    return section
-end
-
-function SecurityMenu:CreateStatCard(parent, label, value, color)
-    local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, 0, 0, 50)
-    card.BackgroundColor3 = self.Theme.Header
-    card.BorderSizePixel = 0
-    card.Parent = parent
+    -- Atualizar stats
+    if self.StatsLabel then
+        self.StatsLabel.Text = string.format(
+            "📊 Total: %d | 🔵 Capturados: %d | 📡 Remotes: %d",
+            self.Stats.Total, self.Stats.Captured, self.Stats.Remote
+        )
+    end
     
-    local labelText = Instance.new("TextLabel")
-    labelText.Size = UDim2.new(1, -100, 1, 0)
-    labelText.Position = UDim2.new(0, 15, 0, 0)
-    labelText.BackgroundTransparency = 1
-    labelText.Text = label
-    labelText.TextColor3 = self.Theme.TextSecondary
-    labelText.TextXAlignment = Enum.TextXAlignment.Left
-    labelText.Font = Enum.Font.Gotham
-    labelText.TextSize = 12
-    labelText.Parent = card
-    
-    local valueText = Instance.new("TextLabel")
-    valueText.Size = UDim2.new(0, 80, 1, 0)
-    valueText.Position = UDim2.new(1, -90, 0, 0)
-    valueText.BackgroundTransparency = 1
-    valueText.Text = tostring(value)
-    valueText.TextColor3 = color
-    valueText.TextXAlignment = Enum.TextXAlignment.Right
-    valueText.Font = Enum.Font.GothamBold
-    valueText.TextSize = 20
-    valueText.Parent = card
-    
-    return card
-end
-
-function SecurityMenu:CreateButton(parent, text, color, callback)
-    local button = Instance.new("TextButton")
-    button.Size = UDim2.new(1, 0, 0, 40)
-    button.BackgroundColor3 = color
-    button.BorderSizePixel = 0
-    button.Text = text
-    button.TextColor3 = self.Theme.Text
-    button.Font = Enum.Font.GothamBold
-    button.TextSize = 13
-    button.Parent = parent
-    
-    button.MouseButton1Click:Connect(callback)
-    
-    return button
-end
-
-function SecurityMenu:CreateInputField(parent, placeholder, callback)
-    local inputFrame = Instance.new("Frame")
-    inputFrame.Size = UDim2.new(1, 0, 0, 35)
-    inputFrame.BackgroundColor3 = self.Theme.Header
-    inputFrame.BorderSizePixel = 0
-    inputFrame.Parent = parent
-    
-    local inputBox = Instance.new("TextBox")
-    inputBox.Size = UDim2.new(1, -20, 1, -10)
-    inputBox.Position = UDim2.new(0, 10, 0, 5)
-    inputBox.BackgroundColor3 = self.Theme.Tab
-    inputBox.BorderSizePixel = 0
-    inputBox.PlaceholderText = placeholder
-    inputBox.PlaceholderColor3 = self.Theme.TextSecondary
-    inputBox.Text = ""
-    inputBox.TextColor3 = self.Theme.Text
-    inputBox.TextXAlignment = Enum.TextXAlignment.Left
-    inputBox.Font = Enum.Font.Gotham
-    inputBox.TextSize = 11
-    inputBox.ClearTextOnFocus = false
-    inputBox.Parent = inputFrame
-    
-    inputBox.FocusLost:Connect(function()
-        callback(inputBox.Text)
-    end)
-    
-    return inputFrame
-end
-
-function SecurityMenu:DisplayLogs(parent, logs, maxLogs)
-    if not logs or #logs == 0 then
-        local emptyLabel = Instance.new("TextLabel")
-        emptyLabel.Size = UDim2.new(1, 0, 0, 60)
-        emptyLabel.BackgroundColor3 = self.Theme.Header
-        emptyLabel.BorderSizePixel = 0
-        emptyLabel.Text = "📭 Nenhum log disponível"
-        emptyLabel.TextColor3 = self.Theme.TextSecondary
-        emptyLabel.Font = Enum.Font.Gotham
-        emptyLabel.TextSize = 12
-        emptyLabel.Parent = parent
+    -- Mostrar eventos capturados
+    if #self.CapturedEvents == 0 then
+        local empty = Instance.new("TextLabel")
+        empty.Size = UDim2.new(1, 0, 0, 100)
+        empty.BackgroundColor3 = self.Colors.header
+        empty.Text = "⚠️ NENHUM EVENTO CAPTURADO\n\nInteraja com o jogo para capturar eventos!"
+        empty.TextColor3 = self.Colors.text2
+        empty.Font = Enum.Font.Gotham
+        empty.TextSize = 13
+        empty.BorderSizePixel = 0
+        empty.Parent = self.ContentFrame
+        
+        local emptyCorner = Instance.new("UICorner")
+        emptyCorner.CornerRadius = UDim.new(0, 6)
+        emptyCorner.Parent = empty
         return
     end
     
-    local displayCount = math.min(#logs, maxLogs or 20)
+    -- Criar cards para cada evento
+    for i, event in ipairs(self.CapturedEvents) do
+        if i > 20 then break end
+        self:CreateEventCard(event)
+    end
+end
+
+function SecurityMenu:CreateEventCard(event)
+    local c = self.Colors
     
-    for i = 1, displayCount do
-        local log = logs[i]
-        if log then
-            self:CreateLogRow(parent, log)
+    local card = Instance.new("Frame")
+    card.Size = UDim2.new(1, 0, 0, 90)
+    card.BackgroundColor3 = c.header
+    card.BorderSizePixel = 0
+    card.Parent = self.ContentFrame
+    
+    local cardCorner = Instance.new("UICorner")
+    cardCorner.CornerRadius = UDim.new(0, 6)
+    cardCorner.Parent = card
+    
+    -- Nome do evento
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(1, -300, 0, 20)
+    nameLabel.Position = UDim2.new(0, 10, 0, 8)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = "📡 " .. event.Name .. " [" .. event.Type .. "]"
+    nameLabel.TextColor3 = c.accent
+    nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.TextSize = 12
+    nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    nameLabel.Parent = card
+    
+    -- Caminho
+    local pathLabel = Instance.new("TextLabel")
+    pathLabel.Size = UDim2.new(1, -300, 0, 16)
+    pathLabel.Position = UDim2.new(0, 10, 0, 28)
+    pathLabel.BackgroundTransparency = 1
+    pathLabel.Text = "📁 " .. event.Path
+    pathLabel.TextColor3 = c.text2
+    pathLabel.TextXAlignment = Enum.TextXAlignment.Left
+    pathLabel.Font = Enum.Font.Gotham
+    pathLabel.TextSize = 9
+    pathLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    pathLabel.Parent = card
+    
+    -- Args
+    local argsStr = "Args: {"
+    for i, arg in ipairs(event.Args) do
+        if type(arg) == "string" then
+            argsStr = argsStr .. '"' .. tostring(arg):sub(1, 30) .. '"'
+        else
+            argsStr = argsStr .. tostring(arg):sub(1, 30)
         end
+        if i < #event.Args then argsStr = argsStr .. ", " end
+        if #argsStr > 100 then argsStr = argsStr .. "..."; break end
     end
-end
-
-function SecurityMenu:CreateLogRow(parent, log)
-    local row = Instance.new("Frame")
-    row.Size = UDim2.new(1, 0, 0, 30)
-    row.BackgroundColor3 = self.Theme.Header
-    row.BorderSizePixel = 0
-    row.Parent = parent
+    argsStr = argsStr .. "}"
     
+    local argsLabel = Instance.new("TextLabel")
+    argsLabel.Size = UDim2.new(1, -300, 0, 16)
+    argsLabel.Position = UDim2.new(0, 10, 0, 46)
+    argsLabel.BackgroundTransparency = 1
+    argsLabel.Text = argsStr
+    argsLabel.TextColor3 = c.warning
+    argsLabel.TextXAlignment = Enum.TextXAlignment.Left
+    argsLabel.Font = Enum.Font.Code
+    argsLabel.TextSize = 9
+    argsLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    argsLabel.Parent = card
+    
+    -- Hora
     local timeLabel = Instance.new("TextLabel")
-    timeLabel.Size = UDim2.new(0, 60, 1, 0)
-    timeLabel.Position = UDim2.new(0, 5, 0, 0)
+    timeLabel.Size = UDim2.new(1, -300, 0, 14)
+    timeLabel.Position = UDim2.new(0, 10, 0, 64)
     timeLabel.BackgroundTransparency = 1
-    timeLabel.Text = log.Time
-    timeLabel.TextColor3 = self.Theme.TextSecondary
+    timeLabel.Text = "🕐 " .. event.Time
+    timeLabel.TextColor3 = c.text2
     timeLabel.TextXAlignment = Enum.TextXAlignment.Left
-    timeLabel.Font = Enum.Font.Code
+    timeLabel.Font = Enum.Font.Gotham
     timeLabel.TextSize = 9
-    timeLabel.Parent = row
+    timeLabel.Parent = card
     
-    local categoryLabel = Instance.new("TextLabel")
-    categoryLabel.Size = UDim2.new(0, 70, 1, 0)
-    categoryLabel.Position = UDim2.new(0, 70, 0, 0)
-    categoryLabel.BackgroundTransparency = 1
-    categoryLabel.Text = "[" .. log.Category .. "]"
-    categoryLabel.TextColor3 = self.Theme.Accent
-    categoryLabel.TextXAlignment = Enum.TextXAlignment.Left
-    categoryLabel.Font = Enum.Font.GothamBold
-    categoryLabel.TextSize = 9
-    categoryLabel.Parent = row
+    -- Botões
+    local btnWidth = 65
+    local btnHeight = 28
+    local btnSpacing = 5
     
-    local msgLabel = Instance.new("TextLabel")
-    msgLabel.Size = UDim2.new(1, -145, 1, 0)
-    msgLabel.Position = UDim2.new(0, 145, 0, 0)
-    msgLabel.BackgroundTransparency = 1
-    msgLabel.Text = log.Message
-    msgLabel.TextColor3 = self.Theme.Text
-    msgLabel.TextXAlignment = Enum.TextXAlignment.Left
-    msgLabel.Font = Enum.Font.Gotham
-    msgLabel.TextSize = 10
-    msgLabel.TextTruncate = Enum.TextTruncate.AtEnd
-    msgLabel.Parent = row
+    -- Replay 1x
+    local btn1 = self:CreateButton(card, "▶️ x1", c.success, 1, -285, 8, btnWidth, btnHeight)
+    btn1.MouseButton1Click:Connect(function()
+        self:ReplayEvent(event, 1)
+    end)
     
-    return row
+    -- Replay 5x
+    local btn5 = self:CreateButton(card, "⚡ x5", c.accent, 1, -285, 8 + btnHeight + btnSpacing, btnWidth, btnHeight)
+    btn5.MouseButton1Click:Connect(function()
+        self:ReplayEvent(event, 5)
+    end)
+    
+    -- Replay 10x
+    local btn10 = self:CreateButton(card, "🔥 x10", c.warning, 1, -215, 8, btnWidth, btnHeight)
+    btn10.MouseButton1Click:Connect(function()
+        self:ReplayEvent(event, 10)
+    end)
+    
+    -- Loop
+    local btnLoop = self:CreateButton(card, event.IsLooping and "⏹️ STOP" or "🔁 LOOP", 
+        event.IsLooping and c.danger or Color3.fromRGB(156, 39, 176), 
+        1, -215, 8 + btnHeight + btnSpacing, btnWidth, btnHeight)
+    btnLoop.MouseButton1Click:Connect(function()
+        self:StartLooping(event)
+        btnLoop.Text = event.IsLooping and "⏹️ STOP" or "🔁 LOOP"
+        btnLoop.BackgroundColor3 = event.IsLooping and c.danger or Color3.fromRGB(156, 39, 176)
+    end)
+    
+    -- Custom
+    local btnCustom = self:CreateButton(card, "⚙️ x?", Color3.fromRGB(100, 100, 120), 1, -145, 8, btnWidth, btnHeight)
+    btnCustom.MouseButton1Click:Connect(function()
+        local times = tonumber(prompt and prompt("Quantas vezes repetir?", "1") or "1")
+        if times and times > 0 then
+            self:ReplayEvent(event, times)
+        end
+    end)
+    
+    -- Info
+    local btnInfo = self:CreateButton(card, "ℹ️ INFO", c.button, 1, -145, 8 + btnHeight + btnSpacing, btnWidth, btnHeight)
+    btnInfo.MouseButton1Click:Connect(function()
+        local info = string.format(
+            "EVENTO: %s\nTIPO: %s\nHORA: %s\nCAMINHO: %s\nARGS: %s",
+            event.Name, event.Type, event.Time, event.Path, 
+            game:GetService("HttpService"):JSONEncode(event.Args)
+        )
+        print("\n" .. string.rep("═", 50))
+        print(info)
+        print(string.rep("═", 50) .. "\n")
+        self:AddLog("ℹ️ Info printada no console: " .. event.Name)
+    end)
 end
 
-function SecurityMenu:UpdateDisplay()
-    if self.CurrentTab then
-        task.spawn(function()
-            self:SwitchTab(self.CurrentTab)
-        end)
-    end
+function SecurityMenu:CreateButton(parent, text, color, anchorX, posX, posY, width, height)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, width, 0, height)
+    btn.Position = UDim2.new(anchorX, posX, 0, posY)
+    btn.AnchorPoint = Vector2.new(anchorX, 0)
+    btn.BackgroundColor3 = color
+    btn.Text = text
+    btn.TextColor3 = self.Colors.text
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 10
+    btn.BorderSizePixel = 0
+    btn.Parent = parent
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 4)
+    corner.Parent = btn
+    
+    return btn
 end
 
-function SecurityMenu:ClearLogs()
-    for category, _ in pairs(self.Logs) do
-        self.Logs[category] = {}
-    end
-    
-    for stat, _ in pairs(self.Stats) do
-        self.Stats[stat] = 0
-    end
-    
-    self:Log("System", "🧹 Todos os logs foram limpos!", {})
-    self:UpdateDisplay()
-end
-
-function SecurityMenu:ToggleMenu()
+function SecurityMenu:Toggle()
     self.IsOpen = not self.IsOpen
     if self.MainFrame then
         self.MainFrame.Visible = self.IsOpen
-    end
-    
-    if self.IsOpen then
-        self:UpdateDisplay()
+        if self.IsOpen then
+            self:RefreshUI()
+        end
     end
 end
-
---═══════════════════════════════════════════════════════════
--- SISTEMA DE KEYBIND
---═══════════════════════════════════════════════════════════
 
 function SecurityMenu:SetupKeybind()
     UserInputService.InputBegan:Connect(function(input, processed)
         if not processed and input.KeyCode == self.OpenKey then
-            self:ToggleMenu()
+            self:Toggle()
         end
     end)
-    
-    self:Log("System", "⌨️ Keybind configurado! Pressione [F] para abrir/fechar", {})
 end
 
 --═══════════════════════════════════════════════════════════
@@ -1115,80 +623,49 @@ end
 --═══════════════════════════════════════════════════════════
 
 function SecurityMenu:Init()
-    if self.IsInitialized then
-        warn("SecurityMenu já foi inicializado!")
-        return false
-    end
+    print("\n" .. string.rep("═", 60))
+    print("🔒 SECURITY MENU v3.0 - EVENT REPLAY SYSTEM")
+    print("   Compatível com Delta Executor")
+    print(string.rep("═", 60))
     
-    self:Log("System", "🚀 Iniciando Security Menu v2.0...", {})
+    -- Criar UI
+    self:CreateUI()
+    self:AddLog("✅ UI Criada")
     
-    local success, err = pcall(function()
-        -- Criar interface
-        self:CreateUI()
-        
-        -- Configurar keybind
-        self:SetupKeybind()
-        
-        -- Iniciar monitoramentos com delays
-        task.wait(1)
-        self:MonitorRemoteEvents()
-        
-        task.wait(0.3)
-        self:MonitorCharacter()
-        
-        task.wait(0.3)
-        self:MonitorInputs()
-        
-        task.wait(0.3)
-        self:MonitorNetwork()
-        
-        self.IsInitialized = true
-        self:Log("System", "✅ SECURITY MENU PRONTO! Pressione [F] para abrir", {})
-        
-        -- Auto-abrir pela primeira vez
-        task.wait(1)
-        self:ToggleMenu()
-    end)
+    -- Configurar keybind
+    self:SetupKeybind()
+    self:AddLog("⌨️ Keybind [F] configurado")
     
-    if not success then
-        warn("SecurityMenu: Erro na inicialização:", err)
-        return false
-    end
+    -- Hook global (método mais eficiente)
+    task.wait(0.5)
+    self:HookAllRemotesAlternative()
     
-    return true
+    -- Scan de remotes existentes
+    task.wait(0.5)
+    self:ScanAndHookRemotes()
+    
+    -- Auto-abrir
+    task.wait(1)
+    self:Toggle()
+    
+    print("✅ Security Menu inicializado!")
+    print("⌨️ Pressione [F] para abrir/fechar")
+    print("🎯 Interaja com o jogo para capturar eventos")
+    print(string.rep("═", 60) .. "\n")
 end
 
---═══════════════════════════════════════════════════════════
--- AUTO-INICIALIZAÇÃO
---═══════════════════════════════════════════════════════════
-
+-- Auto-inicializar
 task.spawn(function()
-    -- Esperar o jogo carregar completamente
     if not game:IsLoaded() then
         game.Loaded:Wait()
     end
+    task.wait(3)
     
-    task.wait(2)
-    
-    print("═══════════════════════════════════════════════════")
-    print("🔒 SECURITY MENU v2.0 - Advanced Pentest Tool")
-    print("═══════════════════════════════════════════════════")
-    
-    local success = SecurityMenu:Init()
-    
-    if success then
-        print("✅ Security Menu carregado com sucesso!")
-        print("⌨️ Pressione [F] para abrir/fechar o menu")
-        print("📡 Todos os Remote Events estão sendo monitorados")
-        print("🔄 Sistema de Replay ativo e pronto!")
-        print("═══════════════════════════════════════════════════")
-    else
-        print("❌ Falha ao carregar Security Menu")
-        print("═══════════════════════════════════════════════════")
-    end
+    SecurityMenu:Init()
 end)
 
--- Tornar global
+-- Global
 getgenv().SecurityMenu = SecurityMenu
+_G.SecurityMenu = SecurityMenu
 
 return SecurityMenu
