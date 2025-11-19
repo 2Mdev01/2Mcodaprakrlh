@@ -1,13 +1,12 @@
--- SHAKA LOGGER v1.2 - SISTEMA DE CAPTURA MANUAL
+-- SHAKA LOGGER v1.3 - CORREÇÃO DE OVERFLOW
 -- Sistema avançado de logging com replay e filtros
--- Tema: Preto e Roxo | Captura ON/OFF
--- REVISADO: Captura e injeção corrigidos
+-- Tema: Preto e Roxo | Anti-Crash
+-- CORRIGIDO: Stack overflow e performance
 
 local ShakaLogger = {}
 
 -- Services
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
@@ -17,13 +16,14 @@ local TweenService = game:GetService("TweenService")
 ShakaLogger.OpenKey = Enum.KeyCode.F
 ShakaLogger.IsOpen = false
 ShakaLogger.CurrentTab = "Settings"
+ShakaLogger.IsRefreshing = false -- NOVO: Prevenir refresh recursivo
 
--- NOVO: Controle de captura global
+-- Controle de captura
 ShakaLogger.CaptureEnabled = {
-    Remote = false,      -- DESATIVADO por padrão
-    Character = false,   -- DESATIVADO por padrão
-    Input = false,       -- DESATIVADO por padrão
-    Network = false      -- DESATIVADO por padrão
+    Remote = false,
+    Character = false,
+    Input = false,
+    Network = false
 }
 
 -- Dados
@@ -37,7 +37,6 @@ ShakaLogger.Logs = {
     System = {}
 }
 
--- Filtros de visualização (separado da captura)
 ShakaLogger.FilterSettings = {
     Remote = true,
     Character = true,
@@ -57,7 +56,7 @@ ShakaLogger.Stats = {
 }
 
 --═══════════════════════════════════════════════════════════
--- SISTEMA DE LOG
+-- SISTEMA DE LOG - OTIMIZADO
 --═══════════════════════════════════════════════════════════
 
 function ShakaLogger:AddLog(category, message, data)
@@ -77,20 +76,20 @@ function ShakaLogger:AddLog(category, message, data)
     
     table.insert(self.Logs[category], 1, log)
     
-    if #self.Logs[category] > 150 then
+    -- Limitar logs
+    if #self.Logs[category] > 50 then
         table.remove(self.Logs[category])
     end
     
     self.Stats.Total = self.Stats.Total + 1
     self.Stats[category] = (self.Stats[category] or 0) + 1
     
-    print(string.format("[SHAKA] [%s] [%s] %s", log.Time, category, message))
-    
-    if self.IsOpen and self.CurrentTab == "Logs" then
-        task.spawn(function()
-            pcall(function() self:RefreshCurrentTab() end)
-        end)
+    -- Print apenas se não for spam
+    if category ~= "Input" or math.random() > 0.8 then
+        print(string.format("[SHAKA] [%s] [%s] %s", log.Time, category, message))
     end
+    
+    -- REMOVIDO: Não atualizar UI automaticamente para evitar recursão
 end
 
 function ShakaLogger:IsEventBlocked(remotePath)
@@ -100,27 +99,25 @@ end
 function ShakaLogger:BlockEvent(remotePath)
     self.BlockedEvents[remotePath] = true
     self.Stats.Blocked = self.Stats.Blocked + 1
-    self:AddLog("System", "🚫 Evento bloqueado: " .. remotePath)
+    print("[SHAKA] 🚫 Bloqueado:", remotePath)
 end
 
 function ShakaLogger:UnblockEvent(remotePath)
     if self.BlockedEvents[remotePath] then
         self.BlockedEvents[remotePath] = nil
         self.Stats.Blocked = math.max(0, self.Stats.Blocked - 1)
-        self:AddLog("System", "✅ Evento desbloqueado: " .. remotePath)
+        print("[SHAKA] ✅ Desbloqueado:", remotePath)
     end
 end
 
 --═══════════════════════════════════════════════════════════
--- SISTEMA DE CAPTURA - VERIFICADO
+-- SISTEMA DE CAPTURA - OTIMIZADO
 --═══════════════════════════════════════════════════════════
 
 function ShakaLogger:CaptureRemoteEvent(remote, eventType, args)
-    -- VERIFICAR SE A CAPTURA ESTÁ ATIVADA
-    if not self.CaptureEnabled.Remote then
-        return
-    end
+    if not self.CaptureEnabled.Remote then return end
     
+    -- Proteção contra spam
     local remotePath = remote:GetFullName()
     
     local eventData = {
@@ -138,21 +135,30 @@ function ShakaLogger:CaptureRemoteEvent(remote, eventType, args)
     
     table.insert(self.CapturedEvents, 1, eventData)
     
-    if #self.CapturedEvents > 150 then
+    -- Limitar eventos capturados
+    if #self.CapturedEvents > 50 then
         table.remove(self.CapturedEvents)
     end
     
     self.Stats.Captured = #self.CapturedEvents
     self.Stats.Remote = self.Stats.Remote + 1
     
+    -- Log simplificado
     local argsStr = self:FormatArgs(args)
-    local status = eventData.IsBlocked and "🚫 BLOQUEADO" or "✅ CAPTURADO"
-    self:AddLog("Remote", string.format("%s 📡 %s [%s] %s", status, remote.Name, eventType, argsStr), eventData)
+    local status = eventData.IsBlocked and "🚫" or "✅"
     
-    if self.IsOpen and self.CurrentTab == "Replay" then
-        task.spawn(function()
-            pcall(function() self:RefreshCurrentTab() end)
-        end)
+    -- Usar AddLog sem recursão
+    local log = {
+        Time = eventData.Time,
+        Category = "Remote",
+        Message = string.format("%s %s [%s] %s", status, remote.Name, eventType, argsStr),
+        Data = eventData,
+        ID = tick()
+    }
+    
+    table.insert(self.Logs.Remote, 1, log)
+    if #self.Logs.Remote > 50 then
+        table.remove(self.Logs.Remote)
     end
     
     return eventData
@@ -163,7 +169,7 @@ function ShakaLogger:FormatArgs(args)
     
     local result = "{"
     for i, arg in ipairs(args) do
-        if i > 5 then
+        if i > 3 then -- Reduzido para 3
             result = result .. "..."
             break
         end
@@ -172,7 +178,7 @@ function ShakaLogger:FormatArgs(args)
         local argType = type(arg)
         
         if argType == "string" then
-            argStr = '"' .. tostring(arg):sub(1, 30) .. '"'
+            argStr = '"' .. tostring(arg):sub(1, 20) .. '"'
         elseif argType == "number" then
             argStr = tostring(arg)
         elseif argType == "boolean" then
@@ -182,13 +188,13 @@ function ShakaLogger:FormatArgs(args)
         elseif typeof(arg) == "Instance" then
             argStr = arg.Name or "Instance"
         elseif typeof(arg) == "Vector3" then
-            argStr = string.format("Vector3(%.1f, %.1f, %.1f)", arg.X, arg.Y, arg.Z)
+            argStr = string.format("V3(%.0f,%.0f,%.0f)", arg.X, arg.Y, arg.Z)
         else
-            argStr = tostring(arg):sub(1, 30)
+            argStr = tostring(arg):sub(1, 20)
         end
         
         result = result .. argStr
-        if i < #args and i < 5 then
+        if i < #args and i < 3 then
             result = result .. ", "
         end
     end
@@ -196,56 +202,37 @@ function ShakaLogger:FormatArgs(args)
 end
 
 --═══════════════════════════════════════════════════════════
--- HOOK GLOBAL - VERIFICADO E TESTADO
+-- HOOK GLOBAL - SIMPLIFICADO
 --═══════════════════════════════════════════════════════════
 
 function ShakaLogger:HookAllRemotes()
-    -- Verificar se as funções necessárias existem
     if not hookmetamethod or not getnamecallmethod or not newcclosure then
-        self:AddLog("System", "❌ ERRO: Executor não suporta hookmetamethod!")
+        warn("[SHAKA] ❌ Executor não suporta hookmetamethod!")
         return false
     end
     
-    local hookSuccess = pcall(function()
+    local success = pcall(function()
         local oldNamecall
         oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
             local method = getnamecallmethod()
             local args = {...}
             
             if typeof(self) == "Instance" then
-                local remotePath = self:GetFullName()
+                local isRemoteEvent = self:IsA("RemoteEvent")
+                local isRemoteFunction = self:IsA("RemoteFunction")
                 
-                -- FireServer (RemoteEvent)
-                if method == "FireServer" and self:IsA("RemoteEvent") then
-                    -- Capturar apenas se estiver ativado
-                    if ShakaLogger.CaptureEnabled.Remote then
-                        task.spawn(function()
-                            pcall(function()
-                                ShakaLogger:CaptureRemoteEvent(self, "RemoteEvent", args)
-                            end)
-                        end)
+                if (method == "FireServer" and isRemoteEvent) or (method == "InvokeServer" and isRemoteFunction) then
+                    local remotePath = self:GetFullName()
+                    
+                    -- Verificar bloqueio PRIMEIRO
+                    if ShakaLogger:IsEventBlocked(remotePath) then
+                        return isRemoteFunction and nil or nil
                     end
                     
-                    -- Bloquear se necessário (independente da captura)
-                    if ShakaLogger:IsEventBlocked(remotePath) then
-                        return -- NÃO executa
-                    end
-                end
-                
-                -- InvokeServer (RemoteFunction)
-                if method == "InvokeServer" and self:IsA("RemoteFunction") then
-                    -- Capturar apenas se estiver ativado
+                    -- Capturar SEM pcall para evitar stack
                     if ShakaLogger.CaptureEnabled.Remote then
-                        task.spawn(function()
-                            pcall(function()
-                                ShakaLogger:CaptureRemoteEvent(self, "RemoteFunction", args)
-                            end)
-                        end)
-                    end
-                    
-                    -- Bloquear se necessário
-                    if ShakaLogger:IsEventBlocked(remotePath) then
-                        return nil -- NÃO executa
+                        local eventType = isRemoteEvent and "RemoteEvent" or "RemoteFunction"
+                        ShakaLogger:CaptureRemoteEvent(self, eventType, args)
                     end
                 end
             end
@@ -254,33 +241,30 @@ function ShakaLogger:HookAllRemotes()
         end))
     end)
     
-    if hookSuccess then
-        self:AddLog("System", "✅ Hook global instalado com sucesso!")
+    if success then
+        print("[SHAKA] ✅ Hook instalado!")
         return true
     else
-        self:AddLog("System", "❌ Falha ao instalar hook global!")
+        warn("[SHAKA] ❌ Falha no hook!")
         return false
     end
 end
 
 --═══════════════════════════════════════════════════════════
--- MONITORAMENTO - COM CONTROLE ON/OFF
+-- MONITORAMENTO - OTIMIZADO
 --═══════════════════════════════════════════════════════════
 
 function ShakaLogger:MonitorCharacter()
     local lastPos = nil
     local lastHealth = nil
-    local checkInterval = 0.5
-    local timeSinceLastCheck = 0
+    local lastUpdate = 0
     
-    RunService.Heartbeat:Connect(function(dt)
-        -- VERIFICAR SE A CAPTURA ESTÁ ATIVADA
+    RunService.Heartbeat:Connect(function()
         if not self.CaptureEnabled.Character then return end
-        if not self.FilterSettings.Character then return end
         
-        timeSinceLastCheck = timeSinceLastCheck + dt
-        if timeSinceLastCheck < checkInterval then return end
-        timeSinceLastCheck = 0
+        local now = tick()
+        if now - lastUpdate < 1 then return end -- 1 segundo de cooldown
+        lastUpdate = now
         
         local player = Players.LocalPlayer
         if not player or not player.Character then return end
@@ -292,8 +276,8 @@ function ShakaLogger:MonitorCharacter()
             local currentPos = root.Position
             if lastPos then
                 local dist = (currentPos - lastPos).Magnitude
-                if dist > 50 then
-                    self:AddLog("Character", string.format("🎯 Movimento: %.1f studs", dist))
+                if dist > 100 then
+                    print(string.format("[SHAKA] 🎯 Movimento: %.0f studs", dist))
                 end
             end
             lastPos = currentPos
@@ -301,89 +285,71 @@ function ShakaLogger:MonitorCharacter()
         
         if humanoid then
             local currentHealth = humanoid.Health
-            if lastHealth and currentHealth ~= lastHealth then
+            if lastHealth and math.abs(currentHealth - lastHealth) > 10 then
                 local change = currentHealth - lastHealth
-                local emoji = change > 0 and "💚" or "❤️"
-                self:AddLog("Character", string.format("%s Saúde: %.1f → %.1f (Δ%.1f)", 
-                    emoji, lastHealth, currentHealth, change))
+                print(string.format("[SHAKA] ❤️ Saúde: %.0f → %.0f", lastHealth, currentHealth))
             end
             lastHealth = currentHealth
         end
     end)
     
-    self:AddLog("System", "✅ Monitor de Character instalado")
+    print("[SHAKA] ✅ Monitor Character ativo")
 end
 
 function ShakaLogger:MonitorInputs()
-    local lastInputTime = {}
-    local inputCooldown = 0.3
+    local lastInput = {}
     
     UserInputService.InputBegan:Connect(function(input, processed)
-        -- VERIFICAR SE A CAPTURA ESTÁ ATIVADA
-        if not self.CaptureEnabled.Input then return end
-        if not self.FilterSettings.Input or processed then return end
+        if not self.CaptureEnabled.Input or processed then return end
         
         local inputName = tostring(input.KeyCode.Name or input.UserInputType.Name)
         local now = tick()
         
-        if lastInputTime[inputName] and (now - lastInputTime[inputName]) < inputCooldown then
+        -- Cooldown de 1 segundo
+        if lastInput[inputName] and (now - lastInput[inputName]) < 1 then
             return
         end
-        lastInputTime[inputName] = now
+        lastInput[inputName] = now
         
         if input.UserInputType == Enum.UserInputType.Keyboard then
-            self:AddLog("Input", "⌨️ Tecla: " .. input.KeyCode.Name)
-        elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
-            self:AddLog("Input", "🖱️ Clique Esquerdo")
-        elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
-            self:AddLog("Input", "🖱️ Clique Direito")
+            print("[SHAKA] ⌨️ Tecla:", input.KeyCode.Name)
         end
     end)
     
-    self:AddLog("System", "✅ Monitor de Input instalado")
+    print("[SHAKA] ✅ Monitor Input ativo")
 end
 
 function ShakaLogger:MonitorNetwork()
     Players.PlayerAdded:Connect(function(player)
-        -- VERIFICAR SE A CAPTURA ESTÁ ATIVADA
-        if not self.CaptureEnabled.Network then return end
-        if not self.FilterSettings.Network then return end
-        self:AddLog("Network", "👤 " .. player.Name .. " entrou no servidor")
+        if self.CaptureEnabled.Network then
+            print("[SHAKA] 👤", player.Name, "entrou")
+        end
     end)
     
     Players.PlayerRemoving:Connect(function(player)
-        if not self.CaptureEnabled.Network then return end
-        if not self.FilterSettings.Network then return end
-        self:AddLog("Network", "👋 " .. player.Name .. " saiu do servidor")
+        if self.CaptureEnabled.Network then
+            print("[SHAKA] 👋", player.Name, "saiu")
+        end
     end)
     
-    self:AddLog("System", "✅ Monitor de Network instalado")
+    print("[SHAKA] ✅ Monitor Network ativo")
 end
 
 --═══════════════════════════════════════════════════════════
--- SISTEMA DE REPLAY - VERIFICADO
+-- REPLAY - VERIFICADO
 --═══════════════════════════════════════════════════════════
 
 function ShakaLogger:ReplayEvent(eventData, times)
     times = times or 1
     local successCount = 0
-    local failCount = 0
-    local errorMsg = nil
     
-    -- Verificar se o remote ainda existe
     if not eventData.Remote or not eventData.Remote.Parent then
-        self:AddLog("System", "❌ ERRO: Remote não existe mais - " .. eventData.Name)
-        return 0
-    end
-    
-    -- Verificar se os args existem
-    if not eventData.Args then
-        self:AddLog("System", "❌ ERRO: Args não encontrados")
+        warn("[SHAKA] ❌ Remote não existe mais:", eventData.Name)
         return 0
     end
     
     for i = 1, times do
-        local success, err = pcall(function()
+        local success = pcall(function()
             if eventData.Type == "RemoteEvent" then
                 eventData.Remote:FireServer(unpack(eventData.Args))
             elseif eventData.Type == "RemoteFunction" then
@@ -391,23 +357,12 @@ function ShakaLogger:ReplayEvent(eventData, times)
             end
         end)
         
-        if success then 
-            successCount = successCount + 1 
-        else
-            failCount = failCount + 1
-            errorMsg = err
-        end
-        
-        if times > 1 then task.wait(0.05) end
+        if success then successCount = successCount + 1 end
+        if times > 1 then task.wait(0.1) end
     end
     
-    if successCount > 0 then
-        self:AddLog("System", string.format("✅ REPLAY: %s [%dx] - %d/%d sucesso", 
-            eventData.Name, times, successCount, times))
-    else
-        self:AddLog("System", string.format("❌ REPLAY FALHOU: %s - %s", 
-            eventData.Name, tostring(errorMsg)))
-    end
+    print(string.format("[SHAKA] ✅ REPLAY: %s [%dx] - %d/%d sucesso", 
+        eventData.Name, times, successCount, times))
     
     return successCount
 end
@@ -415,39 +370,32 @@ end
 function ShakaLogger:ToggleLoop(eventData)
     if eventData.IsLooping then
         eventData.IsLooping = false
-        self:AddLog("System", "⏹️ Loop parado: " .. eventData.Name)
+        print("[SHAKA] ⏹️ Loop parado:", eventData.Name)
         return false
     end
     
     if not eventData.Remote or not eventData.Remote.Parent then
-        self:AddLog("System", "❌ ERRO: Remote não existe mais!")
+        warn("[SHAKA] ❌ Remote não existe!")
         return false
     end
     
     eventData.IsLooping = true
-    self:AddLog("System", "🔁 Loop iniciado: " .. eventData.Name .. " (0.5s intervalo)")
+    print("[SHAKA] 🔁 Loop iniciado:", eventData.Name)
     
     task.spawn(function()
         while eventData.IsLooping do
             if not eventData.Remote or not eventData.Remote.Parent then
                 eventData.IsLooping = false
-                ShakaLogger:AddLog("System", "⚠️ Loop parado: Remote removido")
                 break
             end
             
-            local success, err = pcall(function()
+            pcall(function()
                 if eventData.Type == "RemoteEvent" then
                     eventData.Remote:FireServer(unpack(eventData.Args))
                 elseif eventData.Type == "RemoteFunction" then
                     eventData.Remote:InvokeServer(unpack(eventData.Args))
                 end
             end)
-            
-            if not success then
-                eventData.IsLooping = false
-                ShakaLogger:AddLog("System", "❌ Loop erro: " .. tostring(err))
-                break
-            end
             
             task.wait(0.5)
         end
@@ -457,14 +405,13 @@ function ShakaLogger:ToggleLoop(eventData)
 end
 
 --═══════════════════════════════════════════════════════════
--- INTERFACE
+-- INTERFACE - SIMPLIFICADA
 --═══════════════════════════════════════════════════════════
 
 function ShakaLogger:CreateUI()
     pcall(function()
-        if game:GetService("CoreGui"):FindFirstChild("ShakaLogger") then
-            game:GetService("CoreGui"):FindFirstChild("ShakaLogger"):Destroy()
-        end
+        local existing = game:GetService("CoreGui"):FindFirstChild("ShakaLogger")
+        if existing then existing:Destroy() end
     end)
     
     local gui = Instance.new("ScreenGui")
@@ -489,7 +436,6 @@ function ShakaLogger:CreateUI()
         Tab = Color3.fromRGB(42, 38, 52),
         TabActive = Color3.fromRGB(148, 53, 236),
         Purple = Color3.fromRGB(148, 53, 236),
-        PurpleDark = Color3.fromRGB(110, 35, 190),
         PurpleLight = Color3.fromRGB(196, 95, 221),
         Text = Color3.fromRGB(255, 255, 255),
         TextSecondary = Color3.fromRGB(190, 190, 210),
@@ -556,17 +502,11 @@ function ShakaLogger:CreateUI()
     title.TextSize = 22
     title.Parent = header
     
-    local titleGlow = Instance.new("UIStroke")
-    titleGlow.Color = Theme.Purple
-    titleGlow.Thickness = 1.5
-    titleGlow.Transparency = 0.4
-    titleGlow.Parent = title
-    
     local subtitle = Instance.new("TextLabel")
     subtitle.Size = UDim2.new(1, -120, 0, 16)
     subtitle.Position = UDim2.new(0, 20, 0, 34)
     subtitle.BackgroundTransparency = 1
-    subtitle.Text = "Advanced Event Capture & Replay • v1.2 Manual Control"
+    subtitle.Text = "Event Capture & Replay • v1.3 Anti-Crash"
     subtitle.TextColor3 = Theme.TextSecondary
     subtitle.TextXAlignment = Enum.TextXAlignment.Left
     subtitle.Font = Enum.Font.Gotham
@@ -607,13 +547,9 @@ function ShakaLogger:CreateUI()
     tabLayout.Parent = tabContainer
     
     local tabs = {
-        {Name = "Settings", Icon = "⚙️", Desc = "Controles"},
-        {Name = "Replay", Icon = "🔄", Desc = "Event Replay"},
-        {Name = "Logs", Icon = "📝", Desc = "All Logs"},
-        {Name = "Remote", Icon = "📡", Desc = "Remote Events"},
-        {Name = "Character", Icon = "🎯", Desc = "Character"},
-        {Name = "Input", Icon = "⌨️", Desc = "Inputs"},
-        {Name = "Network", Icon = "🌐", Desc = "Network"}
+        {Name = "Settings", Icon = "⚙️"},
+        {Name = "Replay", Icon = "🔄"},
+        {Name = "Logs", Icon = "📝"}
     }
     
     self.TabButtons = {}
@@ -621,18 +557,14 @@ function ShakaLogger:CreateUI()
     for i, tab in ipairs(tabs) do
         local tabBtn = Instance.new("TextButton")
         tabBtn.Name = tab.Name
-        tabBtn.Size = UDim2.new(0, 127, 1, 0)
+        tabBtn.Size = UDim2.new(0, 295, 1, 0)
         tabBtn.BackgroundColor3 = Theme.Tab
         tabBtn.BorderSizePixel = 0
         tabBtn.Text = tab.Icon .. " " .. tab.Name
         tabBtn.TextColor3 = Theme.TextSecondary
         tabBtn.Font = Enum.Font.GothamBold
-        tabBtn.TextSize = 12
+        tabBtn.TextSize = 14
         tabBtn.Parent = tabContainer
-        
-        local tabCorner = Instance.new("UICorner")
-        tabCorner.CornerRadius = UDim.new(0, 0)
-        tabCorner.Parent = tabBtn
         
         tabBtn.MouseButton1Click:Connect(function()
             self:SwitchTab(tab.Name)
@@ -674,29 +606,21 @@ function ShakaLogger:CreateUI()
         self.ContentFrames[tab.Name] = frame
     end
     
-    self:AddLog("System", "✅ UI SHAKA LOGGER v1.2 criada!")
+    print("[SHAKA] ✅ UI criada!")
 end
 
 function ShakaLogger:SwitchTab(tabName)
+    if self.IsRefreshing then return end
+    
     self.CurrentTab = tabName
     
     for name, btn in pairs(self.TabButtons) do
         if name == tabName then
             btn.BackgroundColor3 = self.Theme.TabActive
             btn.TextColor3 = self.Theme.Text
-            
-            local stroke = btn:FindFirstChild("UIStroke") or Instance.new("UIStroke")
-            stroke.Color = self.Theme.Purple
-            stroke.Thickness = 2
-            stroke.Transparency = 0
-            stroke.Parent = btn
         else
             btn.BackgroundColor3 = self.Theme.Tab
             btn.TextColor3 = self.Theme.TextSecondary
-            
-            if btn:FindFirstChild("UIStroke") then
-                btn:FindFirstChild("UIStroke"):Destroy()
-            end
         end
     end
     
@@ -708,201 +632,149 @@ function ShakaLogger:SwitchTab(tabName)
 end
 
 function ShakaLogger:RefreshCurrentTab()
-    local frame = self.ContentFrames[self.CurrentTab]
-    if not frame then return end
+    if self.IsRefreshing then return end
+    self.IsRefreshing = true
     
-    for _, child in ipairs(frame:GetChildren()) do
-        if not child:IsA("UIListLayout") then
-            child:Destroy()
-        end
-    end
-    
-    if self.CurrentTab == "Settings" then
-        self:CreateSettingsContent(frame)
-    elseif self.CurrentTab == "Replay" then
-        self:CreateReplayContent(frame)
-    elseif self.CurrentTab == "Logs" then
-        self:CreateLogsContent(frame, "All")
-    elseif self.CurrentTab == "Remote" then
-        self:CreateLogsContent(frame, "Remote")
-    elseif self.CurrentTab == "Character" then
-        self:CreateLogsContent(frame, "Character")
-    elseif self.CurrentTab == "Input" then
-        self:CreateLogsContent(frame, "Input")
-    elseif self.CurrentTab == "Network" then
-        self:CreateLogsContent(frame, "Network")
-    end
+    task.spawn(function()
+        pcall(function()
+            local frame = self.ContentFrames[self.CurrentTab]
+            if not frame then 
+                self.IsRefreshing = false
+                return 
+            end
+            
+            for _, child in ipairs(frame:GetChildren()) do
+                if not child:IsA("UIListLayout") then
+                    child:Destroy()
+                end
+            end
+            
+            if self.CurrentTab == "Settings" then
+                self:CreateSettingsContent(frame)
+            elseif self.CurrentTab == "Replay" then
+                self:CreateReplayContent(frame)
+            elseif self.CurrentTab == "Logs" then
+                self:CreateLogsContent(frame)
+            end
+        end)
+        
+        self.IsRefreshing = false
+    end)
 end
 
 --═══════════════════════════════════════════════════════════
--- CONTEÚDO DAS TABS
+-- CONTEÚDO - SIMPLIFICADO
 --═══════════════════════════════════════════════════════════
 
 function ShakaLogger:CreateSettingsContent(frame)
-    -- Card de Controle de Captura
-    local captureCard = self:CreateCard(frame, "🎯 CONTROLE DE CAPTURA (ON/OFF)", 280)
+    local card = self:CreateCard(frame, "🎯 CONTROLE DE CAPTURA", 250)
     
-    local infoText = Instance.new("TextLabel")
-    infoText.Size = UDim2.new(1, -30, 0, 40)
-    infoText.Position = UDim2.new(0, 15, 0, 40)
-    infoText.BackgroundTransparency = 1
-    infoText.Text = "⚠️ Ative apenas as capturas que você deseja usar.\nEventos só serão coletados quando ativados."
-    infoText.TextColor3 = self.Theme.Warning
-    infoText.Font = Enum.Font.Gotham
-    infoText.TextSize = 11
-    infoText.TextWrapped = true
-    infoText.TextXAlignment = Enum.TextXAlignment.Left
-    infoText.TextYAlignment = Enum.TextYAlignment.Top
-    infoText.Parent = captureCard
+    local info = Instance.new("TextLabel")
+    info.Size = UDim2.new(1, -30, 0, 35)
+    info.Position = UDim2.new(0, 15, 0, 40)
+    info.BackgroundTransparency = 1
+    info.Text = "⚠️ Ative apenas o que você precisa para evitar lag"
+    info.TextColor3 = self.Theme.Warning
+    info.Font = Enum.Font.Gotham
+    info.TextSize = 12
+    info.TextWrapped = true
+    info.TextXAlignment = Enum.TextXAlignment.Left
+    info.Parent = card
     
-    local yPos = 85
+    local y = 80
     
     for category, enabled in pairs(self.CaptureEnabled) do
-        self:CreateCaptureToggle(captureCard, category, enabled, yPos)
-        yPos = yPos + 42
+        self:CreateToggle(card, category, enabled, y)
+        y = y + 42
     end
     
-    -- Card de Filtros de Visualização
-    local filterCard = self:CreateCard(frame, "👁️ FILTROS DE VISUALIZAÇÃO", 250)
+    -- Botões de ação
+    local actionsCard = self:CreateCard(frame, "🔧 AÇÕES", 140)
     
-    local filterInfo = Instance.new("TextLabel")
-    filterInfo.Size = UDim2.new(1, -30, 0, 30)
-    filterInfo.Position = UDim2.new(0, 15, 0, 40)
-    filterInfo.BackgroundTransparency = 1
-    filterInfo.Text = "Controle quais logs aparecem na interface"
-    filterInfo.TextColor3 = self.Theme.TextSecondary
-    filterInfo.Font = Enum.Font.Gotham
-    filterInfo.TextSize = 11
-    filterInfo.TextXAlignment = Enum.TextXAlignment.Left
-    filterInfo.Parent = filterCard
-    
-    local filterY = 75
-    
-    for category, enabled in pairs(self.FilterSettings) do
-        self:CreateFilterToggle(filterCard, category, enabled, filterY)
-        filterY = filterY + 42
-    end
-    
-    -- Card de Ações
-    local actionsCard = self:CreateCard(frame, "🔧 AÇÕES RÁPIDAS", 180)
-    
-    local btnY = 45
-    
-    local clearLogsBtn = self:CreateButton(actionsCard, "🗑️ LIMPAR TODOS OS LOGS", self.Theme.Danger, 15, btnY, 320, 38)
-    clearLogsBtn.MouseButton1Click:Connect(function()
-        for cat in pairs(self.Logs) do
-            self.Logs[cat] = {}
-        end
-        self.Stats.Total = 0
-        self.Stats.Remote = 0
-        self.Stats.Character = 0
-        self.Stats.Input = 0
-        self.Stats.Network = 0
-        self:AddLog("System", "🗑️ Todos os logs limpos!")
-        self:RefreshCurrentTab()
-    end)
-    
-    btnY = btnY + 48
-    
-    local clearEventsBtn = self:CreateButton(actionsCard, "🗑️ LIMPAR EVENTOS CAPTURADOS", self.Theme.Warning, 15, btnY, 320, 38)
-    clearEventsBtn.MouseButton1Click:Connect(function()
+    local clearBtn = self:CreateButton(actionsCard, "🗑️ LIMPAR EVENTOS", self.Theme.Danger, 15, 45, 320, 38)
+    clearBtn.MouseButton1Click:Connect(function()
         self.CapturedEvents = {}
         self.Stats.Captured = 0
-        self:AddLog("System", "🗑️ Eventos capturados limpos!")
-        self:RefreshCurrentTab()
+        print("[SHAKA] 🗑️ Eventos limpos!")
     end)
     
-    btnY = btnY + 48
-    
-    local unblockAllBtn = self:CreateButton(actionsCard, "✅ DESBLOQUEAR TODOS OS EVENTOS", self.Theme.Success, 15, btnY, 320, 38)
-    unblockAllBtn.MouseButton1Click:Connect(function()
+    local unblockBtn = self:CreateButton(actionsCard, "✅ DESBLOQUEAR TODOS", self.Theme.Success, 15, 93, 320, 38)
+    unblockBtn.MouseButton1Click:Connect(function()
         self.BlockedEvents = {}
         self.Stats.Blocked = 0
-        self:AddLog("System", "✅ Todos os eventos desbloqueados!")
+        print("[SHAKA] ✅ Desbloqueados!")
         self:RefreshCurrentTab()
     end)
 end
 
 function ShakaLogger:CreateReplayContent(frame)
-    -- Card de Status
-    local statusCard = self:CreateCard(frame, "📊 STATUS DO SISTEMA", 180)
+    local statusCard = self:CreateCard(frame, "📊 STATUS", 120)
     
-    local statusData = {
-        {"Captura de Remotes", self.CaptureEnabled.Remote and "🟢 ATIVA" or "🔴 DESATIVA", 
-            self.CaptureEnabled.Remote and self.Theme.Success or self.Theme.Danger},
-        {"Eventos Capturados", self.Stats.Captured, self.Theme.Purple},
-        {"Eventos Bloqueados", self.Stats.Blocked, self.Theme.Warning},
-        {"Total de Logs", self.Stats.Total, self.Theme.Info}
-    }
-    
-    for i, stat in ipairs(statusData) do
-        self:CreateStatRow(statusCard, stat[1], stat[2], stat[3], 40 + (i - 1) * 32)
-    end
+    local statusText = Instance.new("TextLabel")
+    statusText.Size = UDim2.new(1, -30, 0, 70)
+    statusText.Position = UDim2.new(0, 15, 0, 45)
+    statusText.BackgroundTransparency = 1
+    statusText.Text = string.format(
+        "Captura: %s\nEventos: %d\nBloqueados: %d",
+        self.CaptureEnabled.Remote and "🟢 ATIVA" or "🔴 DESATIVA",
+        self.Stats.Captured,
+        self.Stats.Blocked
+    )
+    statusText.TextColor3 = self.Theme.Text
+    statusText.Font = Enum.Font.GothamBold
+    statusText.TextSize = 14
+    statusText.TextXAlignment = Enum.TextXAlignment.Left
+    statusText.TextYAlignment = Enum.TextYAlignment.Top
+    statusText.Parent = statusCard
     
     if #self.CapturedEvents == 0 then
-        local emptyCard = self:CreateCard(frame, "⚠️ NENHUM EVENTO CAPTURADO", 120)
-        
-        local emptyText = Instance.new("TextLabel")
-        emptyText.Size = UDim2.new(1, -30, 0, 70)
-        emptyText.Position = UDim2.new(0, 15, 0, 40)
-        emptyText.BackgroundTransparency = 1
-        emptyText.Text = self.CaptureEnabled.Remote and 
-            "Interaja com o jogo para capturar eventos.\nOs eventos aparecerão aqui automaticamente." or
-            "⚠️ CAPTURA DESATIVADA!\n\nVá em Settings e ative 'Remote' para começar a capturar eventos."
-        emptyText.TextColor3 = self.CaptureEnabled.Remote and self.Theme.TextSecondary or self.Theme.Warning
-        emptyText.Font = Enum.Font.GothamBold
-        emptyText.TextSize = 13
-        emptyText.TextWrapped = true
-        emptyText.TextYAlignment = Enum.TextYAlignment.Top
-        emptyText.Parent = emptyCard
-        return
-    end
-    
-    -- Lista de eventos
-    for i, event in ipairs(self.CapturedEvents) do
-        if i > 20 then break end
-        self:CreateEventCard(frame, event)
-    end
-end
-
-function ShakaLogger:CreateLogsContent(frame, category)
-    local logs = {}
-    
-    if category == "All" then
-        for cat, catLogs in pairs(self.Logs) do
-            for _, log in ipairs(catLogs) do
-                table.insert(logs, log)
-            end
-        end
-        table.sort(logs, function(a, b) return (a.ID or 0) > (b.ID or 0) end)
-    else
-        logs = self.Logs[category] or {}
-    end
-    
-    if #logs == 0 then
-        local emptyCard = self:CreateCard(frame, "📭 SEM LOGS", 90)
+        local emptyCard = self:CreateCard(frame, "⚠️ NENHUM EVENTO", 90)
         
         local emptyText = Instance.new("TextLabel")
         emptyText.Size = UDim2.new(1, -30, 0, 50)
         emptyText.Position = UDim2.new(0, 15, 0, 40)
         emptyText.BackgroundTransparency = 1
-        emptyText.Text = "Nenhum log capturado nesta categoria.\nAtive a captura em Settings."
+        emptyText.Text = self.CaptureEnabled.Remote and 
+            "Interaja com o jogo para capturar" or
+            "Ative a captura em Settings"
         emptyText.TextColor3 = self.Theme.TextSecondary
         emptyText.Font = Enum.Font.Gotham
-        emptyText.TextSize = 12
+        emptyText.TextSize = 13
         emptyText.TextWrapped = true
         emptyText.Parent = emptyCard
         return
     end
     
+    for i, event in ipairs(self.CapturedEvents) do
+        if i > 10 then break end -- Limitar a 10
+        self:CreateEventCard(frame, event)
+    end
+end
+
+function ShakaLogger:CreateLogsContent(frame)
+    local logs = {}
+    
+    for cat, catLogs in pairs(self.Logs) do
+        for _, log in ipairs(catLogs) do
+            table.insert(logs, log)
+        end
+    end
+    
+    table.sort(logs, function(a, b) return (a.ID or 0) > (b.ID or 0) end)
+    
+    if #logs == 0 then
+        local emptyCard = self:CreateCard(frame, "📭 SEM LOGS", 60)
+        return
+    end
+    
     for i, log in ipairs(logs) do
-        if i > 40 then break end
+        if i > 20 then break end
         self:CreateLogRow(frame, log)
     end
 end
 
 --═══════════════════════════════════════════════════════════
--- COMPONENTES DE UI
+-- COMPONENTES
 --═══════════════════════════════════════════════════════════
 
 function ShakaLogger:CreateCard(parent, title, height)
@@ -938,36 +810,7 @@ function ShakaLogger:CreateCard(parent, title, height)
     return card
 end
 
-function ShakaLogger:CreateStatRow(parent, label, value, color, yPos)
-    local row = Instance.new("Frame")
-    row.Size = UDim2.new(1, -50, 0, 28)
-    row.Position = UDim2.new(0, 25, 0, yPos)
-    row.BackgroundTransparency = 1
-    row.Parent = parent
-    
-    local labelText = Instance.new("TextLabel")
-    labelText.Size = UDim2.new(0.6, 0, 1, 0)
-    labelText.BackgroundTransparency = 1
-    labelText.Text = label
-    labelText.TextColor3 = self.Theme.TextSecondary
-    labelText.TextXAlignment = Enum.TextXAlignment.Left
-    labelText.Font = Enum.Font.Gotham
-    labelText.TextSize = 13
-    labelText.Parent = row
-    
-    local valueText = Instance.new("TextLabel")
-    valueText.Size = UDim2.new(0.4, 0, 1, 0)
-    valueText.Position = UDim2.new(0.6, 0, 0, 0)
-    valueText.BackgroundTransparency = 1
-    valueText.Text = tostring(value)
-    valueText.TextColor3 = color
-    valueText.TextXAlignment = Enum.TextXAlignment.Right
-    valueText.Font = Enum.Font.GothamBold
-    valueText.TextSize = 16
-    valueText.Parent = row
-end
-
-function ShakaLogger:CreateCaptureToggle(parent, category, enabled, yPos)
+function ShakaLogger:CreateToggle(parent, category, enabled, yPos)
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, -30, 0, 38)
     frame.Position = UDim2.new(0, 15, 0, yPos)
@@ -979,18 +822,13 @@ function ShakaLogger:CreateCaptureToggle(parent, category, enabled, yPos)
     frameCorner.CornerRadius = UDim.new(0, 8)
     frameCorner.Parent = frame
     
-    local iconMap = {
-        Remote = "📡",
-        Character = "🎯",
-        Input = "⌨️",
-        Network = "🌐"
-    }
+    local icons = {Remote = "📡", Character = "🎯", Input = "⌨️", Network = "🌐"}
     
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, -110, 1, 0)
     label.Position = UDim2.new(0, 18, 0, 0)
     label.BackgroundTransparency = 1
-    label.Text = (iconMap[category] or "📊") .. " Capturar " .. category
+    label.Text = (icons[category] or "📊") .. " Capturar " .. category
     label.TextColor3 = self.Theme.Text
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Font = Enum.Font.GothamBold
@@ -1017,68 +855,15 @@ function ShakaLogger:CreateCaptureToggle(parent, category, enabled, yPos)
         local isEnabled = self.CaptureEnabled[category]
         toggleBtn.BackgroundColor3 = isEnabled and self.Theme.Success or self.Theme.Danger
         toggleBtn.Text = isEnabled and "🟢 ON" or "🔴 OFF"
-        
-        local statusMsg = isEnabled and "ativada ✅" or "desativada ❌"
-        self:AddLog("System", string.format("Captura de %s %s", category, statusMsg))
+        print(string.format("[SHAKA] Captura de %s %s", category, isEnabled and "ativada" or "desativada"))
     end)
-    
-    return frame
-end
-
-function ShakaLogger:CreateFilterToggle(parent, category, enabled, yPos)
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, -30, 0, 38)
-    frame.Position = UDim2.new(0, 15, 0, yPos)
-    frame.BackgroundColor3 = self.Theme.Tab
-    frame.BorderSizePixel = 0
-    frame.Parent = parent
-    
-    local frameCorner = Instance.new("UICorner")
-    frameCorner.CornerRadius = UDim.new(0, 8)
-    frameCorner.Parent = frame
-    
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -110, 1, 0)
-    label.Position = UDim2.new(0, 18, 0, 0)
-    label.BackgroundTransparency = 1
-    label.Text = "👁️ Mostrar " .. category
-    label.TextColor3 = self.Theme.Text
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Font = Enum.Font.Gotham
-    label.TextSize = 13
-    label.Parent = frame
-    
-    local toggleBtn = Instance.new("TextButton")
-    toggleBtn.Size = UDim2.new(0, 75, 0, 28)
-    toggleBtn.Position = UDim2.new(1, -85, 0.5, -14)
-    toggleBtn.BackgroundColor3 = enabled and self.Theme.Info or Color3.fromRGB(70, 70, 90)
-    toggleBtn.Text = enabled and "✓ SIM" or "✗ NÃO"
-    toggleBtn.TextColor3 = self.Theme.Text
-    toggleBtn.Font = Enum.Font.GothamBold
-    toggleBtn.TextSize = 11
-    toggleBtn.BorderSizePixel = 0
-    toggleBtn.Parent = frame
-    
-    local toggleCorner = Instance.new("UICorner")
-    toggleCorner.CornerRadius = UDim.new(0, 6)
-    toggleCorner.Parent = toggleBtn
-    
-    toggleBtn.MouseButton1Click:Connect(function()
-        self.FilterSettings[category] = not self.FilterSettings[category]
-        local isEnabled = self.FilterSettings[category]
-        toggleBtn.BackgroundColor3 = isEnabled and self.Theme.Info or Color3.fromRGB(70, 70, 90)
-        toggleBtn.Text = isEnabled and "✓ SIM" or "✗ NÃO"
-        self:RefreshCurrentTab()
-    end)
-    
-    return frame
 end
 
 function ShakaLogger:CreateEventCard(parent, event)
     local isBlocked = self:IsEventBlocked(event.Path)
     
     local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, 0, 0, 120)
+    card.Size = UDim2.new(1, 0, 0, 110)
     card.BackgroundColor3 = self.Theme.Card
     card.BorderSizePixel = 0
     card.Parent = parent
@@ -1089,38 +874,16 @@ function ShakaLogger:CreateEventCard(parent, event)
     
     local cardBorder = Instance.new("UIStroke")
     cardBorder.Color = isBlocked and self.Theme.Danger or self.Theme.Purple
-    cardBorder.Thickness = isBlocked and 2 or 1.5
-    cardBorder.Transparency = isBlocked and 0.3 or 0.6
+    cardBorder.Thickness = 2
+    cardBorder.Transparency = 0.5
     cardBorder.Parent = card
     
-    if isBlocked then
-        local blockedBadge = Instance.new("Frame")
-        blockedBadge.Size = UDim2.new(0, 90, 0, 24)
-        blockedBadge.Position = UDim2.new(0, 14, 0, 10)
-        blockedBadge.BackgroundColor3 = self.Theme.Danger
-        blockedBadge.BorderSizePixel = 0
-        blockedBadge.ZIndex = 2
-        blockedBadge.Parent = card
-        
-        local badgeCorner = Instance.new("UICorner")
-        badgeCorner.CornerRadius = UDim.new(0, 6)
-        badgeCorner.Parent = blockedBadge
-        
-        local badgeText = Instance.new("TextLabel")
-        badgeText.Size = UDim2.new(1, 0, 1, 0)
-        badgeText.BackgroundTransparency = 1
-        badgeText.Text = "🚫 BLOQUEADO"
-        badgeText.TextColor3 = self.Theme.Text
-        badgeText.Font = Enum.Font.GothamBold
-        badgeText.TextSize = 10
-        badgeText.Parent = blockedBadge
-    end
-    
+    -- Nome
     local nameLabel = Instance.new("TextLabel")
-    nameLabel.Size = UDim2.new(1, -360, 0, 24)
-    nameLabel.Position = UDim2.new(0, isBlocked and 110 or 14, 0, 10)
+    nameLabel.Size = UDim2.new(1, -340, 0, 24)
+    nameLabel.Position = UDim2.new(0, 14, 0, 10)
     nameLabel.BackgroundTransparency = 1
-    nameLabel.Text = "📡 " .. event.Name .. " [" .. event.Type .. "]"
+    nameLabel.Text = "📡 " .. event.Name
     nameLabel.TextColor3 = self.Theme.PurpleLight
     nameLabel.TextXAlignment = Enum.TextXAlignment.Left
     nameLabel.Font = Enum.Font.GothamBold
@@ -1128,166 +891,155 @@ function ShakaLogger:CreateEventCard(parent, event)
     nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
     nameLabel.Parent = card
     
+    -- Path
     local pathLabel = Instance.new("TextLabel")
-    pathLabel.Size = UDim2.new(1, -360, 0, 20)
+    pathLabel.Size = UDim2.new(1, -340, 0, 18)
     pathLabel.Position = UDim2.new(0, 14, 0, 36)
     pathLabel.BackgroundTransparency = 1
-    pathLabel.Text = "📁 " .. event.Path
+    pathLabel.Text = event.Path
     pathLabel.TextColor3 = self.Theme.TextSecondary
     pathLabel.TextXAlignment = Enum.TextXAlignment.Left
     pathLabel.Font = Enum.Font.Gotham
-    pathLabel.TextSize = 10
+    pathLabel.TextSize = 9
     pathLabel.TextTruncate = Enum.TextTruncate.AtEnd
     pathLabel.Parent = card
     
+    -- Args
     local argsLabel = Instance.new("TextLabel")
-    argsLabel.Size = UDim2.new(1, -360, 0, 20)
-    argsLabel.Position = UDim2.new(0, 14, 0, 58)
+    argsLabel.Size = UDim2.new(1, -340, 0, 18)
+    argsLabel.Position = UDim2.new(0, 14, 0, 56)
     argsLabel.BackgroundTransparency = 1
     argsLabel.Text = "Args: " .. self:FormatArgs(event.Args)
     argsLabel.TextColor3 = self.Theme.Warning
     argsLabel.TextXAlignment = Enum.TextXAlignment.Left
     argsLabel.Font = Enum.Font.Code
-    argsLabel.TextSize = 10
+    argsLabel.TextSize = 9
     argsLabel.TextTruncate = Enum.TextTruncate.AtEnd
     argsLabel.Parent = card
     
-    local timeLabel = Instance.new("TextLabel")
-    timeLabel.Size = UDim2.new(1, -360, 0, 18)
-    timeLabel.Position = UDim2.new(0, 14, 0, 80)
-    timeLabel.BackgroundTransparency = 1
-    timeLabel.Text = "🕐 " .. event.Time
-    timeLabel.TextColor3 = self.Theme.TextSecondary
-    timeLabel.TextXAlignment = Enum.TextXAlignment.Left
-    timeLabel.Font = Enum.Font.Gotham
-    timeLabel.TextSize = 10
-    timeLabel.Parent = card
+    -- Status
+    if isBlocked then
+        local blockedLabel = Instance.new("TextLabel")
+        blockedLabel.Size = UDim2.new(0, 80, 0, 20)
+        blockedLabel.Position = UDim2.new(0, 14, 0, 78)
+        blockedLabel.BackgroundColor3 = self.Theme.Danger
+        blockedLabel.Text = "🚫 BLOQUEADO"
+        blockedLabel.TextColor3 = self.Theme.Text
+        blockedLabel.Font = Enum.Font.GothamBold
+        blockedLabel.TextSize = 9
+        blockedLabel.BorderSizePixel = 0
+        blockedLabel.Parent = card
+        
+        local blockedCorner = Instance.new("UICorner")
+        blockedCorner.CornerRadius = UDim.new(0, 4)
+        blockedCorner.Parent = blockedLabel
+    end
     
     -- Botões
     local btnY = 10
-    local btnSpacing = 37
+    local btnX = -330
     
-    local btn1 = self:CreateButton(card, "▶️ x1", self.Theme.Success, -345, btnY, 75, 30)
+    local btn1 = self:CreateButton(card, "▶️ x1", self.Theme.Success, btnX, btnY, 70, 28)
     btn1.MouseButton1Click:Connect(function()
         self:ReplayEvent(event, 1)
     end)
     
-    local btn5 = self:CreateButton(card, "⚡ x5", self.Theme.Purple, -345, btnY + btnSpacing, 75, 30)
+    local btn5 = self:CreateButton(card, "⚡ x5", self.Theme.Purple, btnX, btnY + 35, 70, 28)
     btn5.MouseButton1Click:Connect(function()
         self:ReplayEvent(event, 5)
     end)
     
-    local btn10 = self:CreateButton(card, "🔥 x10", self.Theme.Warning, -345, btnY + btnSpacing * 2, 75, 30)
+    local btn10 = self:CreateButton(card, "🔥 x10", self.Theme.Warning, btnX, btnY + 70, 70, 28)
     btn10.MouseButton1Click:Connect(function()
         self:ReplayEvent(event, 10)
     end)
     
     local btnLoop = self:CreateButton(card, event.IsLooping and "⏹️ STOP" or "🔁 LOOP", 
-        event.IsLooping and self.Theme.Danger or Color3.fromRGB(138, 43, 226), 
-        -265, btnY, 75, 30)
+        event.IsLooping and self.Theme.Danger or self.Theme.Info, 
+        btnX + 75, btnY, 70, 28)
     btnLoop.MouseButton1Click:Connect(function()
         local looping = self:ToggleLoop(event)
         btnLoop.Text = looping and "⏹️ STOP" or "🔁 LOOP"
-        btnLoop.BackgroundColor3 = looping and self.Theme.Danger or Color3.fromRGB(138, 43, 226)
+        btnLoop.BackgroundColor3 = looping and self.Theme.Danger or self.Theme.Info
     end)
     
     local btnBlock = self:CreateButton(card, isBlocked and "✅ DESBLO" or "🚫 BLOC", 
         isBlocked and self.Theme.Success or self.Theme.Danger, 
-        -265, btnY + btnSpacing, 75, 30)
+        btnX + 75, btnY + 35, 70, 28)
     btnBlock.MouseButton1Click:Connect(function()
         if isBlocked then
             self:UnblockEvent(event.Path)
         else
             self:BlockEvent(event.Path)
         end
+        task.wait(0.1)
         self:RefreshCurrentTab()
     end)
     
-    local btnInfo = self:CreateButton(card, "ℹ️ INFO", Color3.fromRGB(70, 70, 90), -265, btnY + btnSpacing * 2, 75, 30)
+    local btnInfo = self:CreateButton(card, "ℹ️ INFO", Color3.fromRGB(70, 70, 90), btnX + 75, btnY + 70, 70, 28)
     btnInfo.MouseButton1Click:Connect(function()
-        local info = string.format(
-            "\n" .. string.rep("═", 70) .. "\n" ..
-            "📋 INFORMAÇÕES DO EVENTO\n" ..
-            string.rep("═", 70) .. "\n" ..
-            "Nome: %s\n" ..
-            "Tipo: %s\n" ..
-            "Hora: %s\n" ..
-            "Caminho: %s\n" ..
-            "Bloqueado: %s\n\n" ..
-            "Argumentos (JSON):\n%s\n" ..
-            string.rep("═", 70) .. "\n",
-            event.Name,
-            event.Type,
-            event.Time,
-            event.Path,
-            isBlocked and "SIM" or "NÃO",
-            HttpService:JSONEncode(event.Args)
-        )
-        print(info)
-        self:AddLog("System", "ℹ️ Info do evento " .. event.Name .. " printada no console")
+        print("\n" .. string.rep("═", 60))
+        print("📋 EVENTO:", event.Name)
+        print("Tipo:", event.Type)
+        print("Path:", event.Path)
+        print("Args:", HttpService:JSONEncode(event.Args))
+        print(string.rep("═", 60) .. "\n")
     end)
     
-    local btnCopy = self:CreateButton(card, "📋 COPY", self.Theme.Accent, -185, btnY, 75, 30)
+    local btnCopy = self:CreateButton(card, "📋 COPY", self.Theme.Accent, btnX + 150, btnY, 70, 28)
     btnCopy.MouseButton1Click:Connect(function()
         local argsJson = HttpService:JSONEncode(event.Args)
         if setclipboard then
             setclipboard(argsJson)
-            self:AddLog("System", "📋 Args copiados: " .. event.Name)
+            print("[SHAKA] 📋 Copiado!")
         else
-            print("ARGS COPIADOS:", argsJson)
-            self:AddLog("System", "📋 Args printados no console")
+            print("[SHAKA] Args:", argsJson)
         end
     end)
 end
 
 function ShakaLogger:CreateLogRow(parent, log)
     local row = Instance.new("Frame")
-    row.Size = UDim2.new(1, 0, 0, 38)
+    row.Size = UDim2.new(1, 0, 0, 32)
     row.BackgroundColor3 = self.Theme.Card
     row.BorderSizePixel = 0
     row.Parent = parent
     
     local rowCorner = Instance.new("UICorner")
-    rowCorner.CornerRadius = UDim.new(0, 8)
+    rowCorner.CornerRadius = UDim.new(0, 6)
     rowCorner.Parent = row
     
-    local rowBorder = Instance.new("UIStroke")
-    rowBorder.Color = self.Theme.Purple
-    rowBorder.Thickness = 1
-    rowBorder.Transparency = 0.8
-    rowBorder.Parent = row
-    
     local timeLabel = Instance.new("TextLabel")
-    timeLabel.Size = UDim2.new(0, 70, 1, 0)
-    timeLabel.Position = UDim2.new(0, 10, 0, 0)
+    timeLabel.Size = UDim2.new(0, 60, 1, 0)
+    timeLabel.Position = UDim2.new(0, 8, 0, 0)
     timeLabel.BackgroundTransparency = 1
     timeLabel.Text = log.Time
     timeLabel.TextColor3 = self.Theme.TextSecondary
     timeLabel.TextXAlignment = Enum.TextXAlignment.Left
     timeLabel.Font = Enum.Font.Code
-    timeLabel.TextSize = 11
+    timeLabel.TextSize = 10
     timeLabel.Parent = row
     
     local catLabel = Instance.new("TextLabel")
-    catLabel.Size = UDim2.new(0, 90, 1, 0)
-    catLabel.Position = UDim2.new(0, 85, 0, 0)
+    catLabel.Size = UDim2.new(0, 80, 1, 0)
+    catLabel.Position = UDim2.new(0, 73, 0, 0)
     catLabel.BackgroundTransparency = 1
     catLabel.Text = "[" .. log.Category .. "]"
     catLabel.TextColor3 = self.Theme.Purple
     catLabel.TextXAlignment = Enum.TextXAlignment.Left
     catLabel.Font = Enum.Font.GothamBold
-    catLabel.TextSize = 11
+    catLabel.TextSize = 10
     catLabel.Parent = row
     
     local msgLabel = Instance.new("TextLabel")
-    msgLabel.Size = UDim2.new(1, -185, 1, 0)
-    msgLabel.Position = UDim2.new(0, 180, 0, 0)
+    msgLabel.Size = UDim2.new(1, -163, 1, 0)
+    msgLabel.Position = UDim2.new(0, 158, 0, 0)
     msgLabel.BackgroundTransparency = 1
     msgLabel.Text = log.Message
     msgLabel.TextColor3 = self.Theme.Text
     msgLabel.TextXAlignment = Enum.TextXAlignment.Left
     msgLabel.Font = Enum.Font.Gotham
-    msgLabel.TextSize = 11
+    msgLabel.TextSize = 10
     msgLabel.TextTruncate = Enum.TextTruncate.AtEnd
     msgLabel.Parent = row
 end
@@ -1300,27 +1052,25 @@ function ShakaLogger:CreateButton(card, text, color, xPos, yPos, width, height)
     btn.Text = text
     btn.TextColor3 = self.Theme.Text
     btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 11
+    btn.TextSize = 10
     btn.BorderSizePixel = 0
     btn.AutoButtonColor = false
     btn.Parent = card
     
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 6)
+    corner.CornerRadius = UDim.new(0, 5)
     corner.Parent = btn
     
     btn.MouseEnter:Connect(function()
-        TweenService:Create(btn, TweenInfo.new(0.15), {
-            BackgroundColor3 = Color3.fromRGB(
-                math.min(255, color.R * 255 + 25),
-                math.min(255, color.G * 255 + 25),
-                math.min(255, color.B * 255 + 25)
-            )
-        }):Play()
+        btn.BackgroundColor3 = Color3.fromRGB(
+            math.min(255, color.R * 255 + 20),
+            math.min(255, color.G * 255 + 20),
+            math.min(255, color.B * 255 + 20)
+        )
     end)
     
     btn.MouseLeave:Connect(function()
-        TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = color}):Play()
+        btn.BackgroundColor3 = color
     end)
     
     return btn
@@ -1336,16 +1086,16 @@ function ShakaLogger:Toggle()
         if self.IsOpen then
             self.MainFrame.Visible = true
             self.MainFrame.Size = UDim2.new(0, 0, 0, 0)
-            TweenService:Create(self.MainFrame, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            TweenService:Create(self.MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
                 Size = UDim2.new(0, 900, 0, 620)
             }):Play()
             task.wait(0.1)
             self:RefreshCurrentTab()
         else
-            TweenService:Create(self.MainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+            TweenService:Create(self.MainFrame, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
                 Size = UDim2.new(0, 0, 0, 0)
             }):Play()
-            task.wait(0.25)
+            task.wait(0.2)
             self.MainFrame.Visible = false
         end
     end
@@ -1364,24 +1114,19 @@ end
 --═══════════════════════════════════════════════════════════
 
 function ShakaLogger:Init()
-    print("\n" .. string.rep("═", 80))
-    print("⚡ SHAKA LOGGER v1.2 - SISTEMA DE CAPTURA MANUAL")
-    print("   Advanced Event Capture & Replay System")
-    print("   Tema: Preto e Roxo | Controle Total")
-    print(string.rep("═", 80))
+    print("\n" .. string.rep("═", 70))
+    print("⚡ SHAKA LOGGER v1.3 - ANTI-CRASH")
+    print("   Event Capture & Replay System")
+    print(string.rep("═", 70))
     
     self:CreateUI()
-    self:AddLog("System", "✅ SHAKA LOGGER v1.2 UI criada!")
+    print("[SHAKA] ✅ UI criada")
     
     self:SetupKeybind()
-    self:AddLog("System", "⌨️ Keybind [F] configurado")
+    print("[SHAKA] ⌨️ Keybind [F] configurado")
     
     task.wait(0.5)
-    local hookInstalled = self:HookAllRemotes()
-    
-    if not hookInstalled then
-        warn("[SHAKA] AVISO: Hook não instalado. Verifique seu executor.")
-    end
+    self:HookAllRemotes()
     
     task.wait(0.3)
     self:MonitorCharacter()
@@ -1396,27 +1141,14 @@ function ShakaLogger:Init()
     self:Toggle()
     self:SwitchTab("Settings")
     
-    print("✅ SHAKA LOGGER v1.2 inicializado!")
+    print("[SHAKA] ✅ Inicializado!")
     print("")
-    print("⚙️ IMPORTANTE: Vá em Settings e ATIVE as capturas que deseja!")
-    print("")
-    print("🎯 CAPTURAS DISPONÍVEIS:")
-    print("   • Remote Events (FireServer/InvokeServer)")
-    print("   • Character (Movimento e Saúde)")
-    print("   • Input (Teclado e Mouse)")
-    print("   • Network (Players entrando/saindo)")
-    print("")
-    print("🔧 FUNCIONALIDADES:")
-    print("   • Captura ON/OFF individual")
-    print("   • Replay de eventos (x1, x5, x10, Loop)")
-    print("   • Bloqueio de eventos (impede execução)")
-    print("   • Filtros de visualização")
-    print("   • Copiar argumentos (JSON)")
-    print("")
+    print("⚙️ IMPORTANTE: Ative as capturas em Settings!")
     print("⌨️ Pressione [F] para abrir/fechar")
-    print(string.rep("═", 80) .. "\n")
+    print(string.rep("═", 70) .. "\n")
 end
 
+-- Auto-init
 task.spawn(function()
     if not game:IsLoaded() then
         game.Loaded:Wait()
@@ -1428,13 +1160,5 @@ end)
 
 getgenv().ShakaLogger = ShakaLogger
 _G.ShakaLogger = ShakaLogger
-
-print("\n📋 COMANDOS ÚTEIS:")
-print("   _G.ShakaLogger:Toggle() - Abrir/Fechar")
-print("   _G.ShakaLogger.CaptureEnabled.Remote = true - Ativar captura de remotes")
-print("   _G.ShakaLogger:BlockEvent('caminho') - Bloquear evento")
-print("   _G.ShakaLogger:UnblockEvent('caminho') - Desbloquear evento")
-print("   _G.ShakaLogger:ReplayEvent(evento, vezes) - Replay manual")
-print("")
 
 return ShakaLogger
