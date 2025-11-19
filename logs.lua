@@ -636,7 +636,7 @@ function SecurityMenu:Init()
         task.wait(0.5)
         self:MonitorNetwork()
         
-        self:Log("System", "✅ SECURITY MENU PRONTO! Pressione F para abrir")
+        self:Log("System", "✅ SECURITY MENU PRONTO! Pressione adawdasdawd ad F para abrir")
         return true
     end)
     
