@@ -1,4 +1,4 @@
--- SECURITY MENU - CORRIGIDO E TESTADO
+-- SECURITY MENU - TECLA F CORRIGIDA
 -- APENAS para pentest autorizado
 
 local SecurityMenu = {}
@@ -7,8 +7,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
--- Configurações
-SecurityMenu.OpenKey = Enum.KeyCode.RightShift
+-- Configurações - TECLA F
+SecurityMenu.OpenKey = Enum.KeyCode.F
 SecurityMenu.IsOpen = false
 SecurityMenu.CurrentTab = "Dashboard"
 
@@ -233,7 +233,7 @@ function SecurityMenu:CreateUI()
     Title.Size = UDim2.new(1, -100, 1, 0)
     Title.Position = UDim2.new(0, 15, 0, 0)
     Title.BackgroundTransparency = 1
-    Title.Text = "🔒 SECURITY MENU"
+    Title.Text = "🔒 SECURITY MENU (Tecla: F)"
     Title.TextColor3 = Theme.Text
     Title.TextXAlignment = Enum.TextXAlignment.Left
     Title.Font = Enum.Font.GothamBold
@@ -245,7 +245,7 @@ function SecurityMenu:CreateUI()
     CloseBtn.Position = UDim2.new(1, -85, 0.5, -12)
     CloseBtn.BackgroundColor3 = Theme.Error
     CloseBtn.BorderSizePixel = 0
-    CloseBtn.Text = "FECHAR"
+    CloseBtn.Text = "FECHAR [F]"
     CloseBtn.TextColor3 = Theme.Text
     CloseBtn.Font = Enum.Font.GothamBold
     CloseBtn.TextSize = 12
@@ -589,7 +589,7 @@ function SecurityMenu:ToggleMenu()
     end
 end
 
--- Keybind
+-- Keybind CORRIGIDO para TECLA F
 function SecurityMenu:SetupKeybind()
     local success, result = pcall(function()
         UserInputService.InputBegan:Connect(function(input, processed)
@@ -636,7 +636,7 @@ function SecurityMenu:Init()
         task.wait(0.5)
         self:MonitorNetwork()
         
-        self:Log("System", "✅ SECURITY MENU PRONTO! Pressione RightShift")
+        self:Log("System", "✅ SECURITY MENU PRONTO! Pressione F para abrir")
         return true
     end)
     
