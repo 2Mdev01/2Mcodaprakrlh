@@ -1,4 +1,4 @@
--- SHAKA LOGGER v2.4 - CORRIGIDO E OTIMIZADO
+-- SHAKA LOGGER v2.5 - COM EXECUTOR LUA INTEGRADO
 -- Compatível com Delta Executor e outros executores modernos
 
 repeat task.wait() until game:IsLoaded()
@@ -13,6 +13,9 @@ Logger.IsOpen = false
 Logger.CurrentTab = "Settings"
 Logger.UI = {}
 Logger.HookActive = false
+Logger.ExecutorCode = ""
+Logger.ExecutorThread = nil
+Logger.ExecutorRunning = false
 
 -- Services
 local Players = game:GetService("Players")
@@ -36,6 +39,7 @@ local Colors = {
     Success = Color3.fromRGB(46, 204, 113),
     Danger = Color3.fromRGB(231, 76, 60),
     Warning = Color3.fromRGB(255, 165, 0),
+    Blue = Color3.fromRGB(52, 152, 219),
 }
 
 -- Cache de funções originais
@@ -253,6 +257,63 @@ function Logger:InstallHook()
     else
         self:AddLog("System", "❌ Falha na instalação do hook")
         return false
+    end
+end
+
+function Logger:ExecuteCode(code)
+    if self.ExecutorRunning then
+        self:AddLog("Executor", "⚠️ Código já está em execução!")
+        return
+    end
+    
+    if not code or code == "" then
+        self:AddLog("Executor", "❌ Código vazio!")
+        return
+    end
+    
+    self.ExecutorRunning = true
+    self:AddLog("Executor", "▶️ Executando código...")
+    
+    self.ExecutorThread = task.spawn(function()
+        local success, err = pcall(function()
+            local func, loadErr = loadstring(code)
+            if not func then
+                self:AddLog("Executor", "❌ Erro de sintaxe: " .. tostring(loadErr))
+                return
+            end
+            
+            func()
+            self:AddLog("Executor", "✅ Código executado com sucesso!")
+        end)
+        
+        if not success then
+            self:AddLog("Executor", "❌ Erro: " .. tostring(err))
+        end
+        
+        self.ExecutorRunning = false
+        if self.IsOpen and self.CurrentTab == "Executor" then
+            task.wait(0.1)
+            self:RefreshContent()
+        end
+    end)
+end
+
+function Logger:StopExecution()
+    if not self.ExecutorRunning then
+        self:AddLog("Executor", "⚠️ Nenhum código em execução!")
+        return
+    end
+    
+    if self.ExecutorThread then
+        task.cancel(self.ExecutorThread)
+        self.ExecutorThread = nil
+    end
+    
+    self.ExecutorRunning = false
+    self:AddLog("Executor", "⏹️ Execução interrompida!")
+    
+    if self.IsOpen and self.CurrentTab == "Executor" then
+        self:RefreshContent()
     end
 end
 
@@ -711,12 +772,12 @@ end
 
 function Logger:CreateUI()
     pcall(function()
-        local old = CoreGui:FindFirstChild("ShakaLoggerV24")
+        local old = CoreGui:FindFirstChild("ShakaLoggerV25")
         if old then old:Destroy() end
     end)
     
     local gui = Instance.new("ScreenGui")
-    gui.Name = "ShakaLoggerV24"
+    gui.Name = "ShakaLoggerV25"
     gui.ResetOnSpawn = false
     gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     
@@ -751,7 +812,7 @@ function Logger:CreateUI()
     title.Size = UDim2.new(0, 350, 0, 24)
     title.Position = UDim2.new(0, 15, 0, 13)
     title.BackgroundTransparency = 1
-    title.Text = "⚡ SHAKA LOGGER v2.4 BYPASS"
+    title.Text = "⚡ SHAKA LOGGER v2.5 + EXECUTOR"
     title.TextColor3 = Colors.Purple
     title.TextXAlignment = Enum.TextXAlignment.Left
     title.Font = Enum.Font.GothamBold
@@ -796,13 +857,14 @@ function Logger:CreateUI()
     local tabs = {
         {Name = "Settings", Icon = "⚙️"},
         {Name = "Events", Icon = "📡"},
+        {Name = "Executor", Icon = "💻"},
         {Name = "Logs", Icon = "📝"}
     }
     
     for _, tab in ipairs(tabs) do
         local btn = Instance.new("TextButton")
         btn.Name = tab.Name
-        btn.Size = UDim2.new(0, 240, 1, 0)
+        btn.Size = UDim2.new(0, 180, 1, 0)
         btn.BackgroundColor3 = Colors.Card
         btn.Text = tab.Icon .. " " .. tab.Name
         btn.TextColor3 = Colors.TextDim
@@ -893,6 +955,8 @@ function Logger:RefreshContent()
                 self:BuildSettings(frame)
             elseif self.CurrentTab == "Events" then
                 self:BuildEvents(frame)
+            elseif self.CurrentTab == "Executor" then
+                self:BuildExecutor(frame)
             elseif self.CurrentTab == "Logs" then
                 self:BuildLogs(frame)
             end
@@ -942,6 +1006,201 @@ function Logger:BuildSettings(parent)
         self:AddLog("System", "✅ Todos desbloqueados")
         self:RefreshContent()
     end)
+end
+
+function Logger:BuildExecutor(parent)
+    local card = self:CreateCard(parent, "💻 EXECUTOR LUA", 380)
+    
+    -- Status do executor
+    local statusFrame = Instance.new("Frame")
+    statusFrame.Size = UDim2.new(1, -20, 0, 30)
+    statusFrame.Position = UDim2.new(0, 10, 0, 35)
+    statusFrame.BackgroundColor3 = self.ExecutorRunning and Colors.Success or Color3.fromRGB(40, 40, 48)
+    statusFrame.BorderSizePixel = 0
+    statusFrame.ZIndex = 1004
+    statusFrame.Parent = card
+    
+    local statusCorner = Instance.new("UICorner")
+    statusCorner.CornerRadius = UDim.new(0, 6)
+    statusCorner.Parent = statusFrame
+    
+    local statusText = Instance.new("TextLabel")
+    statusText.Size = UDim2.new(1, -20, 1, 0)
+    statusText.Position = UDim2.new(0, 10, 0, 0)
+    statusText.BackgroundTransparency = 1
+    statusText.Text = self.ExecutorRunning and "🟢 EXECUTANDO..." or "⚪ AGUARDANDO CÓDIGO"
+    statusText.TextColor3 = Colors.Text
+    statusText.TextXAlignment = Enum.TextXAlignment.Left
+    statusText.Font = Enum.Font.GothamBold
+    statusText.TextSize = 11
+    statusText.ZIndex = 1005
+    statusText.Parent = statusFrame
+    
+    -- Caixa de texto para código
+    local textBoxFrame = Instance.new("Frame")
+    textBoxFrame.Size = UDim2.new(1, -20, 0, 240)
+    textBoxFrame.Position = UDim2.new(0, 10, 0, 72)
+    textBoxFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 32)
+    textBoxFrame.BorderSizePixel = 0
+    textBoxFrame.ZIndex = 1004
+    textBoxFrame.Parent = card
+    
+    local textBoxCorner = Instance.new("UICorner")
+    textBoxCorner.CornerRadius = UDim.new(0, 6)
+    textBoxCorner.Parent = textBoxFrame
+    
+    local textBox = Instance.new("TextBox")
+    textBox.Size = UDim2.new(1, -20, 1, -20)
+    textBox.Position = UDim2.new(0, 10, 0, 10)
+    textBox.BackgroundTransparency = 1
+    textBox.Text = self.ExecutorCode
+    textBox.PlaceholderText = "-- Cole seu código Lua aqui\n-- Exemplo:\nprint('Hello from SHAKA!')\nwait(1)\nprint('Executor funcionando!')"
+    textBox.TextColor3 = Colors.Text
+    textBox.PlaceholderColor3 = Colors.TextDim
+    textBox.TextXAlignment = Enum.TextXAlignment.Left
+    textBox.TextYAlignment = Enum.TextYAlignment.Top
+    textBox.Font = Enum.Font.Code
+    textBox.TextSize = 12
+    textBox.MultiLine = true
+    textBox.ClearTextOnFocus = false
+    textBox.TextWrapped = true
+    textBox.ZIndex = 1005
+    textBox.Parent = textBoxFrame
+    
+    textBox:GetPropertyChangedSignal("Text"):Connect(function()
+        self.ExecutorCode = textBox.Text
+    end)
+    
+    -- Botões de controle
+    local btnRun = Instance.new("TextButton")
+    btnRun.Size = UDim2.new(0, 240, 0, 38)
+    btnRun.Position = UDim2.new(0, 10, 0, 320)
+    btnRun.BackgroundColor3 = self.ExecutorRunning and Colors.TextDim or Colors.Success
+    btnRun.Text = self.ExecutorRunning and "⏳ EXECUTANDO..." or "▶️ EXECUTAR CÓDIGO"
+    btnRun.TextColor3 = Colors.Text
+    btnRun.Font = Enum.Font.GothamBold
+    btnRun.TextSize = 13
+    btnRun.BorderSizePixel = 0
+    btnRun.ZIndex = 1004
+    btnRun.AutoButtonColor = false
+    btnRun.Active = not self.ExecutorRunning
+    btnRun.Parent = card
+    
+    local btnRunCorner = Instance.new("UICorner")
+    btnRunCorner.CornerRadius = UDim.new(0, 6)
+    btnRunCorner.Parent = btnRun
+    
+    btnRun.MouseButton1Click:Connect(function()
+        if not self.ExecutorRunning then
+            self:ExecuteCode(self.ExecutorCode)
+            task.wait(0.1)
+            self:RefreshContent()
+        end
+    end)
+    
+    local btnStop = Instance.new("TextButton")
+    btnStop.Size = UDim2.new(0, 240, 0, 38)
+    btnStop.Position = UDim2.new(0, 260, 0, 320)
+    btnStop.BackgroundColor3 = self.ExecutorRunning and Colors.Danger or Colors.TextDim
+    btnStop.Text = "⏹️ PARAR EXECUÇÃO"
+    btnStop.TextColor3 = Colors.Text
+    btnStop.Font = Enum.Font.GothamBold
+    btnStop.TextSize = 13
+    btnStop.BorderSizePixel = 0
+    btnStop.ZIndex = 1004
+    btnStop.AutoButtonColor = false
+    btnStop.Active = self.ExecutorRunning
+    btnStop.Parent = card
+    
+    local btnStopCorner = Instance.new("UICorner")
+    btnStopCorner.CornerRadius = UDim.new(0, 6)
+    btnStopCorner.Parent = btnStop
+    
+    btnStop.MouseButton1Click:Connect(function()
+        if self.ExecutorRunning then
+            self:StopExecution()
+        end
+    end)
+    
+    local btnClear = Instance.new("TextButton")
+    btnClear.Size = UDim2.new(0, 240, 0, 38)
+    btnClear.Position = UDim2.new(0, 510, 0, 320)
+    btnClear.BackgroundColor3 = Colors.Warning
+    btnClear.Text = "🗑️ LIMPAR CÓDIGO"
+    btnClear.TextColor3 = Colors.Text
+    btnClear.Font = Enum.Font.GothamBold
+    btnClear.TextSize = 13
+    btnClear.BorderSizePixel = 0
+    btnClear.ZIndex = 1004
+    btnClear.AutoButtonColor = false
+    btnClear.Parent = card
+    
+    local btnClearCorner = Instance.new("UICorner")
+    btnClearCorner.CornerRadius = UDim.new(0, 6)
+    btnClearCorner.Parent = btnClear
+    
+    btnClear.MouseButton1Click:Connect(function()
+        self.ExecutorCode = ""
+        textBox.Text = ""
+        self:AddLog("Executor", "🗑️ Código limpo")
+    end)
+    
+    -- Scripts de exemplo
+    local examplesCard = self:CreateCard(parent, "📚 EXEMPLOS RÁPIDOS", 140)
+    
+    local examples = {
+        {name = "🎯 Teleporte", code = [[-- Teleportar para coordenadas
+local hrp = game.Players.LocalPlayer.Character.HumanoidRootPart
+hrp.CFrame = CFrame.new(0, 50, 0)
+print("Teleportado!")]]},
+        {name = "🏃 Speed", code = [[-- Aumentar velocidade
+local hum = game.Players.LocalPlayer.Character.Humanoid
+hum.WalkSpeed = 100
+print("Speed aumentado!")]]},
+        {name = "🔁 Loop", code = [[-- Loop infinito
+while task.wait(1) do
+    print("Loop executando...")
+end]]}
+    }
+    
+    local yPos = 40
+    for i, ex in ipairs(examples) do
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(0, 240, 0, 28)
+        btn.Position = UDim2.new(0, 10 + ((i-1) * 250), 0, yPos)
+        btn.BackgroundColor3 = Colors.Blue
+        btn.Text = ex.name
+        btn.TextColor3 = Colors.Text
+        btn.Font = Enum.Font.GothamBold
+        btn.TextSize = 11
+        btn.BorderSizePixel = 0
+        btn.ZIndex = 1004
+        btn.AutoButtonColor = false
+        btn.Parent = examplesCard
+        
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 5)
+        corner.Parent = btn
+        
+        btn.MouseButton1Click:Connect(function()
+            self.ExecutorCode = ex.code
+            self:AddLog("Executor", "📋 Exemplo carregado: " .. ex.name)
+            self:RefreshContent()
+        end)
+    end
+    
+    local info = Instance.new("TextLabel")
+    info.Size = UDim2.new(1, -20, 0, 50)
+    info.Position = UDim2.new(0, 10, 0, 75)
+    info.BackgroundTransparency = 1
+    info.Text = "💡 Dica: Clique nos exemplos acima para carregar código pronto!\nVocê pode editar e executar qualquer código Lua."
+    info.TextColor3 = Colors.TextDim
+    info.Font = Enum.Font.Gotham
+    info.TextSize = 10
+    info.TextWrapped = true
+    info.TextXAlignment = Enum.TextXAlignment.Left
+    info.ZIndex = 1004
+    info.Parent = examplesCard
 end
 
 function Logger:BuildEvents(parent)
@@ -1034,8 +1293,8 @@ end
 
 function Logger:Init()
     SafePrint("\n" .. string.rep("═", 70))
-    SafePrint("⚡ SHAKA LOGGER v2.4 - CORRIGIDO E OTIMIZADO")
-    SafePrint("   UI Completa • Bypass Anti-Detecção • Sistema de Exploits")
+    SafePrint("⚡ SHAKA LOGGER v2.5 - COM EXECUTOR LUA")
+    SafePrint("   UI Completa • Executor Integrado • Sistema de Exploits")
     SafePrint(string.rep("═", 70))
     
     SafePrint("\n🔍 Verificando executor...")
@@ -1043,7 +1302,8 @@ function Logger:Init()
         hookmetamethod = hookmetamethod ~= nil,
         getnamecallmethod = getnamecallmethod ~= nil,
         newcclosure = newcclosure ~= nil,
-        setclipboard = setclipboard ~= nil
+        setclipboard = setclipboard ~= nil,
+        loadstring = loadstring ~= nil
     }
     
     for name, supported in pairs(features) do
@@ -1079,7 +1339,7 @@ function Logger:Init()
     
     SafePrint("\n✅ SHAKA LOGGER PRONTO!")
     SafePrint("⌨️ Pressione [F] para abrir/fechar")
-    SafePrint("⚙️ Ative 'Remote' em Settings para capturar eventos")
+    SafePrint("💻 Nova aba EXECUTOR para rodar código Lua!")
     SafePrint("📋 Use o botão 📋 para copiar exploits prontos!")
     SafePrint(string.rep("═", 70) .. "\n")
 end
