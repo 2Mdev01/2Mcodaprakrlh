@@ -1,10 +1,22 @@
 -- SHAKA LOGGER v3.0 ULTIMATE - DUMPER + EXECUTOR + ADVANCED CAPTURE
 -- Sistema completo de análise e exploração de jogos Roblox
+-- Compatível com Delta Executor
 
--- Aguardar jogo carregar
-if not game:IsLoaded() then
-    game.Loaded:Wait()
+-- Aguardar jogo carregar de forma segura
+local function waitForGame()
+    if game then
+        if game.IsLoaded then
+            if not game:IsLoaded() then
+                game.Loaded:Wait()
+            end
+        else
+            task.wait(2)
+        end
+    end
 end
+
+pcall(waitForGame)
+task.wait(1)
 
 local Logger = {}
 Logger.Events = {}
@@ -21,14 +33,30 @@ Logger.ExecutorHistory = {}
 Logger.DumpData = {}
 Logger.Filters = {RemoteEvent = true, RemoteFunction = true, BindableEvent = true}
 
--- Services
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInput = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-local CoreGui = game:GetService("CoreGui")
-local HttpService = game:GetService("HttpService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+-- Services com proteção total
+local Services = {}
+
+local function getService(serviceName)
+    if not Services[serviceName] then
+        local success, service = pcall(function()
+            return game:GetService(serviceName)
+        end)
+        if success and service then
+            Services[serviceName] = service
+        else
+            Services[serviceName] = nil
+        end
+    end
+    return Services[serviceName]
+end
+
+local Players = getService("Players")
+local RunService = getService("RunService")
+local UserInput = getService("UserInputService")
+local TweenService = getService("TweenService")
+local HttpService = getService("HttpService")
+local ReplicatedStorage = getService("ReplicatedStorage")
+local CoreGui = getService("CoreGui")
 
 -- Configurações
 local MAX_EVENTS = 100
@@ -55,22 +83,50 @@ local Colors = {
     Border = Color3.fromRGB(51, 65, 85),
 }
 
--- Cache de funções originais
+-- Cache de funções originais com proteção
 local OriginalFunctions = {}
 local MonitoredRemotes = {}
 
-pcall(function()
-    local tempEvent = Instance.new("RemoteEvent")
-    local tempFunc = Instance.new("RemoteFunction")
-    OriginalFunctions.FireServer = tempEvent.FireServer
-    OriginalFunctions.InvokeServer = tempFunc.InvokeServer
-    tempEvent:Destroy()
-    tempFunc:Destroy()
-end)
+local function cacheOriginalFunctions()
+    pcall(function()
+        local tempEvent = Instance.new("RemoteEvent")
+        local tempFunc = Instance.new("RemoteFunction")
+        
+        if tempEvent and tempEvent.FireServer then
+            OriginalFunctions.FireServer = tempEvent.FireServer
+        end
+        
+        if tempFunc and tempFunc.InvokeServer then
+            OriginalFunctions.InvokeServer = tempFunc.InvokeServer
+        end
+        
+        if tempEvent then tempEvent:Destroy() end
+        if tempFunc then tempFunc:Destroy() end
+    end)
+end
+
+cacheOriginalFunctions()
 
 -- Utilitários
 local function SafePrint(...)
-    pcall(print, "[SHAKA v3.0]", ...)
+    local success = pcall(function()
+        print("[SHAKA v3.0]", ...)
+    end)
+    if not success then
+        -- Fallback silencioso
+    end
+end
+
+local function SafeWait(duration)
+    duration = duration or 0.1
+    local success = pcall(function()
+        if task and task.wait then
+            task.wait(duration)
+        else
+            wait(duration)
+        end
+    end)
+    return success
 end
 
 local function DeepCopy(obj)
@@ -800,10 +856,15 @@ end
 
 -- CRIAR UI PRINCIPAL
 function Logger:CreateUI()
+    -- Remover UI antiga se existir
     pcall(function()
-        local old = CoreGui:FindFirstChild("ShakaLoggerV3")
-        if old then old:Destroy() end
+        if CoreGui then
+            local old = CoreGui:FindFirstChild("ShakaLoggerV3")
+            if old then old:Destroy() end
+        end
     end)
+    
+    SafeWait(0.2)
     
     local gui = Instance.new("ScreenGui")
     gui.Name = "ShakaLoggerV3"
@@ -811,9 +872,36 @@ function Logger:CreateUI()
     gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     gui.IgnoreGuiInset = true
     
-    pcall(function() gui.Parent = CoreGui end)
-    if not gui.Parent then
-        gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+    -- Tentar colocar no CoreGui primeiro
+    local placed = false
+    
+    if CoreGui then
+        local success = pcall(function()
+            gui.Parent = CoreGui
+        end)
+        placed = success and gui.Parent ~= nil
+    end
+    
+    -- Se falhou, tentar PlayerGui
+    if not placed and Players then
+        local success = pcall(function()
+            local player = Players.LocalPlayer
+            if player then
+                local playerGui = player:FindFirstChild("PlayerGui")
+                if not playerGui then
+                    playerGui = player:WaitForChild("PlayerGui", 5)
+                end
+                if playerGui then
+                    gui.Parent = playerGui
+                    placed = true
+                end
+            end
+        end)
+    end
+    
+    if not placed or not gui.Parent then
+        SafePrint("❌ Erro ao criar UI - Parent não definido")
+        return false
     end
     
     -- Main Container
