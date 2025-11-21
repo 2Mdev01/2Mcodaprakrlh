@@ -1,7 +1,10 @@
 -- SHAKA LOGGER v3.0 ULTIMATE - DUMPER + EXECUTOR + ADVANCED CAPTURE
 -- Sistema completo de análise e exploração de jogos Roblox
 
-repeat task.wait() until game:IsLoaded()
+-- Aguardar jogo carregar
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
 
 local Logger = {}
 Logger.Events = {}
