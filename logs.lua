@@ -1,5 +1,5 @@
--- SHAKA LOGGER v2.4 - COMPLETO E FUNCIONAL
--- UI Compsleta + Bypass Anti-Detecção + Sistema de Exploit
+-- SHAKA LOGGER v2.4 - CORRIGIDO E OTIMIZADO
+-- Compatível com Delta Executor e outros executores modernos
 
 repeat task.wait() until game:IsLoaded()
 
@@ -38,7 +38,7 @@ local Colors = {
     Warning = Color3.fromRGB(255, 165, 0),
 }
 
--- Cache original functions
+-- Cache de funções originais
 local OriginalFunctions = {}
 pcall(function()
     local tempEvent = Instance.new("RemoteEvent")
@@ -95,7 +95,6 @@ function Logger:AddLog(category, message)
     
     SafePrint(string.format("[%s] %s", category, message))
     
-    -- Atualizar UI se estiver aberta
     if self.IsOpen and self.CurrentTab == "Logs" then
         task.spawn(function()
             pcall(function()
@@ -134,7 +133,6 @@ function Logger:CaptureEvent(remote, eventType, args)
     self.Stats.Captured = #self.Events
     self:AddLog("Remote", string.format("📡 %s %s", remote.Name, FormatArgs(args)))
     
-    -- Atualizar UI se estiver na aba Events
     if self.IsOpen and self.CurrentTab == "Events" then
         task.spawn(function()
             pcall(function()
@@ -246,14 +244,14 @@ function Logger:InstallHook()
         self.HookActive = true
         self:AddLog("System", "✅ Sistema de captura ativo!")
         if hookSuccess then
-            self:AddLog("System", "📌 Hook tradicional: OK")
+            self:AddLog("System", "📌 Hook metamétodo: OK")
         end
         if monitorSuccess then
             self:AddLog("System", "📌 Monitor direto: OK")
         end
         return true
     else
-        self:AddLog("System", "❌ Falha na instalação")
+        self:AddLog("System", "❌ Falha na instalação do hook")
         return false
     end
 end
@@ -302,7 +300,7 @@ function Logger:ToggleLoop(event)
     event.IsLooping = not event.IsLooping
     
     if event.IsLooping then
-        self:AddLog("System", "🔁 Loop: " .. event.Name)
+        self:AddLog("System", "🔁 Loop iniciado: " .. event.Name)
         
         task.spawn(function()
             while event.IsLooping do
@@ -331,7 +329,7 @@ function Logger:ToggleLoop(event)
             end
         end)
     else
-        self:AddLog("System", "⏹️ Loop parado")
+        self:AddLog("System", "⏹️ Loop parado: " .. event.Name)
     end
     
     return event.IsLooping
@@ -376,7 +374,7 @@ function Logger:StartMonitoring()
                 if hum then
                     local hp = hum.Health
                     if lastHp and math.abs(hp - lastHp) > 20 then
-                        self:AddLog("Character", string.format("❤️ Saúde: %.0f → %.0f", lastHp, hp))
+                        self:AddLog("Character", string.format("❤️ HP: %.0f → %.0f", lastHp, hp))
                     end
                     lastHp = hp
                 end
@@ -405,35 +403,130 @@ function Logger:StartMonitoring()
     self:AddLog("System", "✅ Monitores ativos")
 end
 
--- UI COMPLETA
-function Logger:CreateUI()
-    pcall(function()
-        local old = CoreGui:FindFirstChild("ShakaLoggerV24")
-        if old then old:Destroy() end
+function Logger:CreateButton(parent, text, color, xPos, yPos, width, height)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, width, 0, height)
+    btn.Position = UDim2.new(1, xPos, 0, yPos)
+    btn.BackgroundColor3 = color
+    btn.Text = text
+    btn.TextColor3 = Colors.Text
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 10
+    btn.BorderSizePixel = 0
+    btn.AutoButtonColor = false
+    btn.ZIndex = 1005
+    btn.Parent = parent
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 5)
+    corner.Parent = btn
+    
+    btn.MouseEnter:Connect(function()
+        local r = math.min(255, color.R * 255 + 25)
+        local g = math.min(255, color.G * 255 + 25)
+        local b = math.min(255, color.B * 255 + 25)
+        btn.BackgroundColor3 = Color3.fromRGB(r, g, b)
     end)
     
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "ShakaLoggerV24"
-    gui.ResetOnSpawn = false
-    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    btn.MouseLeave:Connect(function()
+        btn.BackgroundColor3 = color
+    end)
     
-    pcall(function() gui.Parent = CoreGui end)
-    if not gui.Parent then
-        gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+    return btn
+end
+
+function Logger:CreateCard(parent, title, height)
+    local card = Instance.new("Frame")
+    card.Size = UDim2.new(1, 0, 0, height)
+    card.BackgroundColor3 = Colors.Card
+    card.BorderSizePixel = 0
+    card.ZIndex = 1003
+    card.Parent = parent
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = card
+    
+    if title then
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, -15, 0, 28)
+        label.Position = UDim2.new(0, 10, 0, 5)
+        label.BackgroundTransparency = 1
+        label.Text = title
+        label.TextColor3 = Colors.Purple
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Font = Enum.Font.GothamBold
+        label.TextSize = 13
+        label.ZIndex = 1004
+        label.Parent = card
     end
     
-    -- Main Frame
-    local main = Instance.new("Frame")
-    main.Name = "Main"
-    main.Size = UDim2.new(0, 800, 0, 550)
-    main.Position = UDim2.new(0.5, -400, 0.5, -275)
-    main.BackgroundColor3 = Colors.BG
-    main.BorderSizePixel = 0
-    main.Visible = false
-    main.ZIndex = 1000
-    main.Parent = gui
+    return card
+end
+
+function Logger:CreateToggle(parent, name, yPos)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -20, 0, 35)
+    frame.Position = UDim2.new(0, 10, 0, yPos)
+    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
+    frame.BorderSizePixel = 0
+    frame.ZIndex = 1004
+    frame.Parent = parent
     
-    self.UI.Main = main
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = frame
+    
+    local icons = {Remote = "📡", Character = "🎯", Input = "⌨️"}
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -90, 1, 0)
+    label.Position = UDim2.new(0, 12, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = (icons[name] or "📊") .. " " .. name
+    label.TextColor3 = Colors.Text
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 12
+    label.ZIndex = 1005
+    label.Parent = frame
+    
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 65, 0, 26)
+    btn.Position = UDim2.new(1, -72, 0.5, -13)
+    btn.BackgroundColor3 = self.Capture[name] and Colors.Success or Colors.Danger
+    btn.Text = self.Capture[name] and "ON" or "OFF"
+    btn.TextColor3 = Colors.Text
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 11
+    btn.BorderSizePixel = 0
+    btn.ZIndex = 1005
+    btn.AutoButtonColor = false
+    btn.Parent = frame
+    
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 5)
+    btnCorner.Parent = btn
+    
+    btn.MouseButton1Click:Connect(function()
+        self.Capture[name] = not self.Capture[name]
+        btn.BackgroundColor3 = self.Capture[name] and Colors.Success or Colors.Danger
+        btn.Text = self.Capture[name] and "ON" or "OFF"
+        self:AddLog("System", name .. ": " .. (self.Capture[name] and "ON" or "OFF"))
+    end)
+end
+
+function Logger:CreateEventCard(parent, event)
+    if not event then return end
+    
+    local isBlocked = self.Blocked[event.Path]
+    
+    local card = Instance.new("Frame")
+    card.Size = UDim2.new(1, 0, 0, 90)
+    card.BackgroundColor3 = Colors.Card
+    card.BorderSizePixel = 0
+    card.ZIndex = 1003
+    card.Parent = parent
     
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 8)
@@ -445,7 +538,6 @@ function Logger:CreateUI()
     stroke.Transparency = 0.5
     stroke.Parent = card
     
-    -- Info
     local name = Instance.new("TextLabel")
     name.Size = UDim2.new(1, -270, 0, 20)
     name.Position = UDim2.new(0, 10, 0, 8)
@@ -503,7 +595,6 @@ function Logger:CreateUI()
         blockedCorner.Parent = blocked
     end
     
-    -- Buttons
     local btnX = -260
     
     local btn1 = self:CreateButton(card, "▶️", Colors.Success, btnX, 8, 55, 24)
@@ -544,13 +635,13 @@ function Logger:CreateUI()
         if setclipboard then
             local code = string.format([[
 -- Exploit gerado pelo SHAKA LOGGER
-local event = game:GetService("%s")
-event:FireServer(%s)
+local remote = game:GetService("%s")
+remote:FireServer(%s)
 ]], event.Path:match("^(.+)%."), FormatArgs(event.Args))
             setclipboard(code)
-            self:AddLog("System", "📋 Exploit copiado!")
+            self:AddLog("System", "📋 Código copiado!")
         else
-            self:AddLog("System", "❌ setclipboard não suportado")
+            self:AddLog("System", "❌ setclipboard não disponível")
         end
     end)
     
@@ -618,143 +709,38 @@ function Logger:CreateLogRow(parent, log)
     msg.Parent = card
 end
 
-function Logger:CreateButton(parent, text, color, xPos, yPos, width, height)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, width, 0, height)
-    btn.Position = UDim2.new(1, xPos, 0, yPos)
-    btn.BackgroundColor3 = color
-    btn.Text = text
-    btn.TextColor3 = Colors.Text
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 10
-    btn.BorderSizePixel = 0
-    btn.AutoButtonColor = false
-    btn.ZIndex = 1005
-    btn.Parent = parent
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 5)
-    corner.Parent = btn
-    
-    btn.MouseEnter:Connect(function()
-        local r = math.min(255, color.R * 255 + 25)
-        local g = math.min(255, color.G * 255 + 25)
-        local b = math.min(255, color.B * 255 + 25)
-        btn.BackgroundColor3 = Color3.fromRGB(r, g, b)
-    end)
-    
-    btn.MouseLeave:Connect(function()
-        btn.BackgroundColor3 = color
-    end)
-    
-    return btn
-end
-
-function Logger:Toggle()
-    self.IsOpen = not self.IsOpen
-    
-    if not self.UI.Main then return end
-    
+function Logger:CreateUI()
     pcall(function()
-        if self.IsOpen then
-            self.UI.Main.Visible = true
-            self.UI.Main.Size = UDim2.new(0, 0, 0, 0)
-            
-            TweenService:Create(self.UI.Main, 
-                TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-                {Size = UDim2.new(0, 800, 0, 550)}):Play()
-            
-            task.wait(0.15)
-            self:RefreshContent()
-        else
-            TweenService:Create(self.UI.Main, 
-                TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.In),
-                {Size = UDim2.new(0, 0, 0, 0)}):Play()
-            
-            task.wait(0.2)
-            self.UI.Main.Visible = false
-        end
+        local old = CoreGui:FindFirstChild("ShakaLoggerV24")
+        if old then old:Destroy() end
     end)
-end
-
-function Logger:SetupKeybind()
-    UserInput.InputBegan:Connect(function(input, processed)
-        if not processed and input.KeyCode == OPEN_KEY then
-            pcall(function()
-                self:Toggle()
-            end)
-        end
-    end)
-end
-
-function Logger:Init()
-    SafePrint("\n" .. string.rep("═", 70))
-    SafePrint("⚡ SHAKA LOGGER v2.4 - COMPLETO E FUNCIONAL")
-    SafePrint("   UI Completa • Bypass Anti-Detecção • Sistema de Exploits")
-    SafePrint(string.rep("═", 70))
     
-    SafePrint("\n🔍 Verificando executor...")
-    local features = {
-        hookmetamethod = hookmetamethod ~= nil,
-        getnamecallmethod = getnamecallmethod ~= nil,
-        newcclosure = newcclosure ~= nil,
-        setclipboard = setclipboard ~= nil
-    }
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "ShakaLoggerV24"
+    gui.ResetOnSpawn = false
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     
-    for name, supported in pairs(features) do
-        SafePrint((supported and "✅" or "❌") .. " " .. name)
+    pcall(function() gui.Parent = CoreGui end)
+    if not gui.Parent then
+        gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
     end
     
-    task.wait(0.3)
-    pcall(function()
-        self:CreateUI()
-    end)
+    local main = Instance.new("Frame")
+    main.Name = "Main"
+    main.Size = UDim2.new(0, 800, 0, 550)
+    main.Position = UDim2.new(0.5, -400, 0.5, -275)
+    main.BackgroundColor3 = Colors.BG
+    main.BorderSizePixel = 0
+    main.Visible = false
+    main.ZIndex = 1000
+    main.Parent = gui
     
-    task.wait(0.2)
-    pcall(function()
-        self:SetupKeybind()
-    end)
+    self.UI.Main = main
     
-    task.wait(0.5)
-    pcall(function()
-        self:InstallHook()
-    end)
-    
-    task.wait(0.3)
-    pcall(function()
-        self:StartMonitoring()
-    end)
-    
-    task.wait(1)
-    pcall(function()
-        self:Toggle()
-        task.wait(0.2)
-        self:SwitchTab("Settings")
-    end)
-    
-    SafePrint("\n✅ SHAKA LOGGER PRONTO!")
-    SafePrint("⌨️ Pressione [F] para abrir/fechar")
-    SafePrint("⚙️ Ative 'Remote' em Settings para capturar eventos")
-    SafePrint("📋 Use o botão 📋 para copiar exploits prontos!")
-    SafePrint(string.rep("═", 70) .. "\n")
-end
-
-task.spawn(function()
-    task.wait(2)
-    pcall(function()
-        Logger:Init()
-    end)
-end)
-
-pcall(function()
-    getgenv().ShakaLogger = Logger
-    _G.ShakaLogger = Logger
-end)
-
-return LoggerRadius = UDim.new(0, 12)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 12)
     corner.Parent = main
     
-    -- Header
     local header = Instance.new("Frame")
     header.Size = UDim2.new(1, 0, 0, 50)
     header.BackgroundTransparency = 1
@@ -794,7 +780,6 @@ return LoggerRadius = UDim.new(0, 12)
         self:Toggle()
     end)
     
-    -- Tab Bar
     local tabBar = Instance.new("Frame")
     tabBar.Size = UDim2.new(1, -30, 0, 40)
     tabBar.Position = UDim2.new(0, 15, 0, 55)
@@ -839,7 +824,6 @@ return LoggerRadius = UDim.new(0, 12)
         self.UI.TabButtons[tab.Name] = btn
     end
     
-    -- Content Area
     local content = Instance.new("Frame")
     content.Size = UDim2.new(1, -30, 1, -110)
     content.Position = UDim2.new(0, 15, 0, 100)
@@ -942,6 +926,7 @@ function Logger:BuildSettings(parent)
     local card3 = self:CreateCard(parent, "🔧 AÇÕES", 110)
     
     local btn1 = self:CreateButton(card3, "🗑️ Limpar Eventos", Colors.Danger, 10, 40, 350, 32)
+    btn1.Position = UDim2.new(0, 10, 0, 40)
     btn1.MouseButton1Click:Connect(function()
         self.Events = {}
         self.Stats.Captured = 0
@@ -950,6 +935,7 @@ function Logger:BuildSettings(parent)
     end)
     
     local btn2 = self:CreateButton(card3, "✅ Desbloquear Todos", Colors.Success, 10, 78, 350, 32)
+    btn2.Position = UDim2.new(0, 10, 0, 78)
     btn2.MouseButton1Click:Connect(function()
         self.Blocked = {}
         self.Stats.Blocked = 0
@@ -1009,98 +995,105 @@ function Logger:BuildLogs(parent)
     end
 end
 
-function Logger:CreateCard(parent, title, height)
-    local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, 0, 0, height)
-    card.BackgroundColor3 = Colors.Card
-    card.BorderSizePixel = 0
-    card.ZIndex = 1003
-    card.Parent = parent
+function Logger:Toggle()
+    self.IsOpen = not self.IsOpen
     
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = card
+    if not self.UI.Main then return end
     
-    if title then
-        local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(1, -15, 0, 28)
-        label.Position = UDim2.new(0, 10, 0, 5)
-        label.BackgroundTransparency = 1
-        label.Text = title
-        label.TextColor3 = Colors.Purple
-        label.TextXAlignment = Enum.TextXAlignment.Left
-        label.Font = Enum.Font.GothamBold
-        label.TextSize = 13
-        label.ZIndex = 1004
-        label.Parent = card
-    end
-    
-    return card
-end
-
-function Logger:CreateToggle(parent, name, yPos)
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, -20, 0, 35)
-    frame.Position = UDim2.new(0, 10, 0, yPos)
-    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-    frame.BorderSizePixel = 0
-    frame.ZIndex = 1004
-    frame.Parent = parent
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 6)
-    corner.Parent = frame
-    
-    local icons = {Remote = "📡", Character = "🎯", Input = "⌨️"}
-    
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -90, 1, 0)
-    label.Position = UDim2.new(0, 12, 0, 0)
-    label.BackgroundTransparency = 1
-    label.Text = (icons[name] or "📊") .. " " .. name
-    label.TextColor3 = Colors.Text
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Font = Enum.Font.GothamBold
-    label.TextSize = 12
-    label.ZIndex = 1005
-    label.Parent = frame
-    
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 65, 0, 26)
-    btn.Position = UDim2.new(1, -72, 0.5, -13)
-    btn.BackgroundColor3 = self.Capture[name] and Colors.Success or Colors.Danger
-    btn.Text = self.Capture[name] and "ON" or "OFF"
-    btn.TextColor3 = Colors.Text
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 11
-    btn.BorderSizePixel = 0
-    btn.ZIndex = 1005
-    btn.AutoButtonColor = false
-    btn.Parent = frame
-    
-    local btnCorner = Instance.new("UICorner")
-    btnCorner.CornerRadius = UDim.new(0, 5)
-    btnCorner.Parent = btn
-    
-    btn.MouseButton1Click:Connect(function()
-        self.Capture[name] = not self.Capture[name]
-        btn.BackgroundColor3 = self.Capture[name] and Colors.Success or Colors.Danger
-        btn.Text = self.Capture[name] and "ON" or "OFF"
-        self:AddLog("System", name .. ": " .. (self.Capture[name] and "ON" or "OFF"))
+    pcall(function()
+        if self.IsOpen then
+            self.UI.Main.Visible = true
+            self.UI.Main.Size = UDim2.new(0, 0, 0, 0)
+            
+            TweenService:Create(self.UI.Main, 
+                TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                {Size = UDim2.new(0, 800, 0, 550)}):Play()
+            
+            task.wait(0.15)
+            self:RefreshContent()
+        else
+            TweenService:Create(self.UI.Main, 
+                TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.In),
+                {Size = UDim2.new(0, 0, 0, 0)}):Play()
+            
+            task.wait(0.2)
+            self.UI.Main.Visible = false
+        end
     end)
 end
 
-function Logger:CreateEventCard(parent, event)
-    if not event then return end
+function Logger:SetupKeybind()
+    UserInput.InputBegan:Connect(function(input, processed)
+        if not processed and input.KeyCode == OPEN_KEY then
+            pcall(function()
+                self:Toggle()
+            end)
+        end
+    end)
+end
+
+function Logger:Init()
+    SafePrint("\n" .. string.rep("═", 70))
+    SafePrint("⚡ SHAKA LOGGER v2.4 - CORRIGIDO E OTIMIZADO")
+    SafePrint("   UI Completa • Bypass Anti-Detecção • Sistema de Exploits")
+    SafePrint(string.rep("═", 70))
     
-    local isBlocked = self.Blocked[event.Path]
+    SafePrint("\n🔍 Verificando executor...")
+    local features = {
+        hookmetamethod = hookmetamethod ~= nil,
+        getnamecallmethod = getnamecallmethod ~= nil,
+        newcclosure = newcclosure ~= nil,
+        setclipboard = setclipboard ~= nil
+    }
     
-    local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, 0, 0, 90)
-    card.BackgroundColor3 = Colors.Card
-    card.BorderSizePixel = 0
-    card.ZIndex = 1003
-    card.Parent = parent
+    for name, supported in pairs(features) do
+        SafePrint((supported and "✅" or "❌") .. " " .. name)
+    end
     
-    local corner = Instance.new("UICorner")
-    corner.Corner
+    task.wait(0.3)
+    pcall(function()
+        self:CreateUI()
+    end)
+    
+    task.wait(0.2)
+    pcall(function()
+        self:SetupKeybind()
+    end)
+    
+    task.wait(0.5)
+    pcall(function()
+        self:InstallHook()
+    end)
+    
+    task.wait(0.3)
+    pcall(function()
+        self:StartMonitoring()
+    end)
+    
+    task.wait(1)
+    pcall(function()
+        self:Toggle()
+        task.wait(0.2)
+        self:SwitchTab("Settings")
+    end)
+    
+    SafePrint("\n✅ SHAKA LOGGER PRONTO!")
+    SafePrint("⌨️ Pressione [F] para abrir/fechar")
+    SafePrint("⚙️ Ative 'Remote' em Settings para capturar eventos")
+    SafePrint("📋 Use o botão 📋 para copiar exploits prontos!")
+    SafePrint(string.rep("═", 70) .. "\n")
+end
+
+task.spawn(function()
+    task.wait(2)
+    pcall(function()
+        Logger:Init()
+    end)
+end)
+
+pcall(function()
+    getgenv().ShakaLogger = Logger
+    _G.ShakaLogger = Logger
+end)
+
+return Logger
