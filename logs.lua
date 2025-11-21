@@ -1,5 +1,5 @@
 -- SHAKA LOGGER v2.4 - COMPLETO E FUNCIONAL
--- UI Completa + Bypass Anti-Detecção + Sistema de Exploit
+-- UI Compsleta + Bypass Anti-Detecção + Sistema de Exploit
 
 repeat task.wait() until game:IsLoaded()
 
