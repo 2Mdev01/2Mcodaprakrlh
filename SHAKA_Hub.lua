@@ -768,7 +768,7 @@ function L:Go()
     self:Hook()
     
     Log("✅ PRONTO!")
-    Log("Pressione [F]")
+    Log("Pressione [sF]")
     
     wait(1)
     self:Tog()
