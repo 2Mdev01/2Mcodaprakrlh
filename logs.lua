@@ -1,7 +1,7 @@
 -- SHAKA LOGGER v3.0 - Delta Executor
 -- Versão Ultra Simplificada
-
-wait(1)
+local _ = nil
+wait(2)
 
 print("=================================")
 print("SHAKA LOGGER v3.0 Iniciando...")
