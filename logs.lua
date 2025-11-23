@@ -1,219 +1,182 @@
--- SHAKA LOGGER v3.0 - Delta Executor Edition
-print("[SHAKA] Iniciando...")
-wait(2)
+-- SHAKA LOGGER v3.0 - Delta Executor
+-- Versão Ultra Simplificada
 
--- Verificar ambiente básico
-if not game then
-    print("[SHAKA] ERRO: game não encontrado")
-    return
+wait(1)
+
+print("=================================")
+print("SHAKA LOGGER v3.0 Iniciando...")
+print("=================================")
+
+wait(1)
+
+-- Criar tabela global
+if not getgenv then
+    getgenv = function() return _G end
 end
 
-if not Players then
-    Players = game:GetService("Players")
-end
+getgenv().Shaka = {}
+local L = getgenv().Shaka
 
--- Tabela principal
-getgenv().ShakaLogger = getgenv().ShakaLogger or {}
-local Logger = getgenv().ShakaLogger
+-- Dados
+L.Events = {}
+L.Logs = {}
+L.Blocked = {}
+L.IsOpen = false
+L.Tab = "Home"
 
--- Inicializar propriedades
-Logger.Events = Logger.Events or {}
-Logger.Logs = Logger.Logs or {}
-Logger.Blocked = Logger.Blocked or {}
-Logger.Stats = Logger.Stats or {Captured = 0, Blocked = 0, Replayed = 0}
-Logger.IsOpen = false
-Logger.CurrentTab = "Dashboard"
-Logger.UI = Logger.UI or {}
+-- Config
+local KEY = Enum.KeyCode.F
+local MAX = 30
 
--- Configurações
-local OPEN_KEY = Enum.KeyCode.F
-local MAX_EVENTS = 50
-
--- Cores
+-- Colors
 local C = {
-    BG = Color3.fromRGB(15, 15, 20),
-    Card = Color3.fromRGB(25, 25, 35),
-    Primary = Color3.fromRGB(99, 102, 241),
-    Success = Color3.fromRGB(34, 197, 94),
-    Danger = Color3.fromRGB(239, 68, 68),
-    Warning = Color3.fromRGB(251, 146, 60),
-    Text = Color3.fromRGB(248, 250, 252),
-    TextDim = Color3.fromRGB(148, 163, 184),
+    BG = Color3.new(0.06, 0.06, 0.08),
+    Card = Color3.new(0.1, 0.1, 0.14),
+    Main = Color3.new(0.39, 0.4, 0.95),
+    Good = Color3.new(0.13, 0.77, 0.37),
+    Bad = Color3.new(0.94, 0.27, 0.27),
+    Warn = Color3.new(0.98, 0.57, 0.24),
+    Text = Color3.new(0.97, 0.98, 0.99),
+    Gray = Color3.new(0.58, 0.64, 0.72)
 }
 
--- Services seguros
-local Services = {}
-local function GetService(name)
-    if not Services[name] then
-        local s, r = pcall(function()
-            return game:GetService(name)
-        end)
-        Services[name] = s and r or nil
+-- Services
+local Plr = game:GetService("Players")
+local Run = game:GetService("RunService")
+local Inp = game:GetService("UserInputService")
+local Tw = game:GetService("TweenService")
+
+-- Funções
+local function Log(txt)
+    print("[SHAKA]", txt)
+    table.insert(L.Logs, 1, {T = os.date("%H:%M:%S"), M = txt})
+    while #L.Logs > MAX do
+        table.remove(L.Logs)
     end
-    return Services[name]
 end
 
-local Players = GetService("Players")
-local RunService = GetService("RunService")
-local UserInputService = GetService("UserInputService")
-local TweenService = GetService("TweenService")
-
--- Funções auxiliares
-local function Log(msg)
-    pcall(function()
-        print("[SHAKA]", msg)
-        table.insert(Logger.Logs, 1, {
-            Time = os.date("%H:%M:%S"),
-            Message = tostring(msg)
-        })
-        while #Logger.Logs > 50 do
-            table.remove(Logger.Logs)
-        end
-    end)
-end
-
-local function FormatArgs(args)
-    if not args then return "{}" end
+local function Fmt(a)
+    if not a then return "{}" end
     local t = {}
-    for i = 1, math.min(3, #args) do
-        pcall(function()
-            local arg = args[i]
-            if type(arg) == "string" then
-                table.insert(t, '"' .. tostring(arg):sub(1, 15) .. '"')
-            elseif type(arg) == "number" then
-                table.insert(t, tostring(arg))
-            elseif typeof(arg) == "Instance" then
-                table.insert(t, arg.Name or "?")
-            else
-                table.insert(t, tostring(arg):sub(1, 10))
-            end
-        end)
+    for i = 1, math.min(3, #a) do
+        local v = a[i]
+        if type(v) == "string" then
+            table.insert(t, '"' .. tostring(v):sub(1, 10) .. '"')
+        elseif type(v) == "number" then
+            table.insert(t, tostring(v))
+        elseif typeof(v) == "Instance" then
+            table.insert(t, v.Name)
+        else
+            table.insert(t, tostring(v):sub(1, 8))
+        end
     end
-    return "{" .. table.concat(t, ", ") .. "}"
+    return "{" .. table.concat(t, ",") .. "}"
 end
 
--- Sistema de captura
-function Logger:CaptureEvent(remote, eventType, args)
-    pcall(function()
-        if not remote or not remote.Parent then return end
-        
-        local path = remote:GetFullName()
-        if self.Blocked[path] then return end
-        
-        local event = {
-            Name = remote.Name,
-            Type = eventType,
-            Path = path,
-            Remote = remote,
-            Args = args or {},
-            Time = os.date("%H:%M:%S"),
-            IsLooping = false
-        }
-        
-        table.insert(self.Events, 1, event)
-        while #self.Events > MAX_EVENTS do
-            table.remove(self.Events)
-        end
-        
-        self.Stats.Captured = #self.Events
-        
-        if self.IsOpen and self.CurrentTab == "Events" then
-            task.spawn(function() self:RefreshContent() end)
-        end
-    end)
+-- Captura
+function L:Cap(r, t, a)
+    if not r or not r.Parent then return end
+    
+    local p = r:GetFullName()
+    if self.Blocked[p] then return end
+    
+    local e = {
+        N = r.Name,
+        T = t,
+        P = p,
+        R = r,
+        A = a or {},
+        Time = os.date("%H:%M:%S"),
+        Loop = false
+    }
+    
+    table.insert(self.Events, 1, e)
+    while #self.Events > MAX do
+        table.remove(self.Events)
+    end
+    
+    if self.IsOpen then
+        task.spawn(function() self:Ref() end)
+    end
 end
 
 -- Hook
-function Logger:InstallHook()
+function L:Hook()
     Log("Instalando hook...")
-    
-    local hooked = false
     
     -- Método 1
     if hookmetamethod and getnamecallmethod then
         pcall(function()
             local old
-            old = hookmetamethod(game, "__namecall", function(self, ...)
-                local method = getnamecallmethod()
-                local args = {...}
-                
-                if method == "FireServer" or method == "InvokeServer" then
+            old = hookmetamethod(game, "__namecall", function(s, ...)
+                local m = getnamecallmethod()
+                if m == "FireServer" or m == "InvokeServer" then
                     task.spawn(function()
-                        pcall(function()
-                            if typeof(self) == "Instance" then
-                                Logger:CaptureEvent(self, method == "FireServer" and "RemoteEvent" or "RemoteFunction", args)
-                            end
-                        end)
+                        if typeof(s) == "Instance" then
+                            L:Cap(s, m == "FireServer" and "RE" or "RF", {...})
+                        end
                     end)
                 end
-                
-                return old(self, ...)
+                return old(s, ...)
             end)
-            hooked = true
-            Log("Hook instalado!")
+            Log("Hook OK!")
         end)
     end
     
     -- Método 2
     task.spawn(function()
-        for _, obj in ipairs(game:GetDescendants()) do
-            pcall(function()
-                if obj:IsA("RemoteEvent") then
-                    local old = obj.FireServer
-                    obj.FireServer = function(self, ...)
-                        task.spawn(function()
-                            Logger:CaptureEvent(self, "RemoteEvent", {...})
-                        end)
-                        return old(self, ...)
+        for _, o in ipairs(game:GetDescendants()) do
+            if o:IsA("RemoteEvent") then
+                pcall(function()
+                    local old = o.FireServer
+                    o.FireServer = function(s, ...)
+                        task.spawn(function() L:Cap(s, "RE", {...}) end)
+                        return old(s, ...)
                     end
-                elseif obj:IsA("RemoteFunction") then
-                    local old = obj.InvokeServer
-                    obj.InvokeServer = function(self, ...)
-                        task.spawn(function()
-                            Logger:CaptureEvent(self, "RemoteFunction", {...})
-                        end)
-                        return old(self, ...)
+                end)
+            elseif o:IsA("RemoteFunction") then
+                pcall(function()
+                    local old = o.InvokeServer
+                    o.InvokeServer = function(s, ...)
+                        task.spawn(function() L:Cap(s, "RF", {...}) end)
+                        return old(s, ...)
                     end
-                end
-            end)
+                end)
+            end
         end
     end)
-    
-    return hooked
 end
 
 -- Replay
-function Logger:Replay(event, times)
-    times = times or 1
+function L:Rep(e, n)
     task.spawn(function()
-        for i = 1, times do
+        for i = 1, n do
             pcall(function()
-                if event.Type == "RemoteEvent" then
-                    event.Remote:FireServer(unpack(event.Args))
+                if e.T == "RE" then
+                    e.R:FireServer(unpack(e.A))
                 else
-                    event.Remote:InvokeServer(unpack(event.Args))
+                    e.R:InvokeServer(unpack(e.A))
                 end
             end)
-            if i < times then wait(0.2) end
+            if i < n then wait(0.2) end
         end
-        self.Stats.Replayed = self.Stats.Replayed + times
-        Log("Replay x" .. times)
+        Log("Replay x" .. n)
     end)
 end
 
 -- Loop
-function Logger:ToggleLoop(event)
-    event.IsLooping = not event.IsLooping
+function L:Loop(e)
+    e.Loop = not e.Loop
     
-    if event.IsLooping then
-        Log("Loop ON: " .. event.Name)
+    if e.Loop then
+        Log("Loop ON")
         task.spawn(function()
-            while event.IsLooping do
+            while e.Loop do
                 pcall(function()
-                    if event.Remote and event.Remote.Parent then
-                        event.Remote:FireServer(unpack(event.Args))
+                    if e.R and e.R.Parent then
+                        e.R:FireServer(unpack(e.A))
                     else
-                        event.IsLooping = false
+                        e.Loop = false
                     end
                 end)
                 wait(0.5)
@@ -223,25 +186,23 @@ function Logger:ToggleLoop(event)
         Log("Loop OFF")
     end
     
-    return event.IsLooping
+    return e.Loop
 end
 
 -- Block
-function Logger:ToggleBlock(path)
-    if self.Blocked[path] then
-        self.Blocked[path] = nil
-        self.Stats.Blocked = self.Stats.Blocked - 1
+function L:Block(p)
+    if self.Blocked[p] then
+        self.Blocked[p] = nil
         Log("Desbloqueado")
     else
-        self.Blocked[path] = true
-        self.Stats.Blocked = self.Stats.Blocked + 1
+        self.Blocked[p] = true
         Log("Bloqueado")
     end
 end
 
--- Executor
-function Logger:Execute(code)
-    if not code or code == "" then
+-- Exec
+function L:Exec(c)
+    if not c or c == "" then
         Log("Código vazio!")
         return
     end
@@ -249,653 +210,586 @@ function Logger:Execute(code)
     Log("Executando...")
     task.spawn(function()
         local s, e = pcall(function()
-            local f, err = loadstring(code)
+            local f = loadstring(c)
             if f then
                 f()
-                Log("Sucesso!")
-            else
-                Log("Erro: " .. tostring(err))
+                Log("✅ Sucesso!")
             end
         end)
         if not s then
-            Log("Erro: " .. tostring(e))
+            Log("❌ Erro: " .. tostring(e))
         end
     end)
 end
 
 -- UI
-function Logger:CreateUI()
+function L:UI()
     Log("Criando UI...")
     
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "ShakaLogger"
-    gui.ResetOnSpawn = false
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "Shaka"
+    sg.ResetOnSpawn = false
     
-    -- Tentar CoreGui
-    local placed = pcall(function()
-        local CoreGui = GetService("CoreGui")
-        if CoreGui then
-            gui.Parent = CoreGui
-        end
+    pcall(function()
+        sg.Parent = game:GetService("CoreGui")
     end)
     
-    -- Fallback PlayerGui
-    if not placed or not gui.Parent then
-        pcall(function()
-            local player = Players.LocalPlayer
-            if player then
-                gui.Parent = player:WaitForChild("PlayerGui", 5)
-            end
-        end)
+    if not sg.Parent then
+        sg.Parent = Plr.LocalPlayer:WaitForChild("PlayerGui")
     end
     
-    if not gui.Parent then
-        Log("ERRO: Não foi possível criar UI")
-        return false
-    end
+    -- Main
+    local m = Instance.new("Frame")
+    m.Name = "Main"
+    m.Size = UDim2.new(0, 700, 0, 500)
+    m.Position = UDim2.new(0.5, -350, 0.5, -250)
+    m.BackgroundColor3 = C.BG
+    m.BorderSizePixel = 0
+    m.Visible = false
+    m.Parent = sg
     
-    -- Frame principal
-    local main = Instance.new("Frame")
-    main.Name = "Main"
-    main.Size = UDim2.new(0, 800, 0, 550)
-    main.Position = UDim2.new(0.5, -400, 0.5, -275)
-    main.BackgroundColor3 = C.BG
-    main.BorderSizePixel = 0
-    main.Visible = false
-    main.Parent = gui
+    self.Main = m
     
-    self.UI.Main = main
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 12)
-    corner.Parent = main
+    local mc = Instance.new("UICorner")
+    mc.CornerRadius = UDim.new(0, 10)
+    mc.Parent = m
     
     -- Header
-    local header = Instance.new("Frame")
-    header.Size = UDim2.new(1, 0, 0, 50)
-    header.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
-    header.BorderSizePixel = 0
-    header.Parent = main
+    local h = Instance.new("Frame")
+    h.Size = UDim2.new(1, 0, 0, 45)
+    h.BackgroundColor3 = Color3.new(0.08, 0.08, 0.12)
+    h.BorderSizePixel = 0
+    h.Parent = m
     
-    local hcorner = Instance.new("UICorner")
-    hcorner.CornerRadius = UDim.new(0, 12)
-    hcorner.Parent = header
+    local hc = Instance.new("UICorner")
+    hc.CornerRadius = UDim.new(0, 10)
+    hc.Parent = h
     
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -100, 1, 0)
-    title.Position = UDim2.new(0, 15, 0, 0)
-    title.BackgroundTransparency = 1
-    title.Text = "⚡ SHAKA LOGGER v3.0"
-    title.TextColor3 = C.Text
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 18
-    title.Parent = header
+    local t = Instance.new("TextLabel")
+    t.Size = UDim2.new(1, -80, 1, 0)
+    t.Position = UDim2.new(0, 10, 0, 0)
+    t.BackgroundTransparency = 1
+    t.Text = "⚡ SHAKA LOGGER v3.0"
+    t.TextColor3 = C.Text
+    t.TextXAlignment = Enum.TextXAlignment.Left
+    t.Font = Enum.Font.GothamBold
+    t.TextSize = 16
+    t.Parent = h
     
-    -- Botão fechar
-    local close = Instance.new("TextButton")
-    close.Size = UDim2.new(0, 40, 0, 40)
-    close.Position = UDim2.new(1, -45, 0, 5)
-    close.BackgroundColor3 = C.Danger
-    close.Text = "X"
-    close.TextColor3 = C.Text
-    close.Font = Enum.Font.GothamBold
-    close.TextSize = 16
-    close.BorderSizePixel = 0
-    close.Parent = header
+    -- Close
+    local x = Instance.new("TextButton")
+    x.Size = UDim2.new(0, 35, 0, 35)
+    x.Position = UDim2.new(1, -40, 0, 5)
+    x.BackgroundColor3 = C.Bad
+    x.Text = "X"
+    x.TextColor3 = C.Text
+    x.Font = Enum.Font.GothamBold
+    x.TextSize = 14
+    x.BorderSizePixel = 0
+    x.Parent = h
     
-    local ccorner = Instance.new("UICorner")
-    ccorner.CornerRadius = UDim.new(0, 8)
-    ccorner.Parent = close
+    local xc = Instance.new("UICorner")
+    xc.CornerRadius = UDim.new(0, 6)
+    xc.Parent = x
     
-    close.MouseButton1Click:Connect(function()
-        self:Toggle()
+    x.MouseButton1Click:Connect(function()
+        self:Tog()
     end)
     
     -- Tabs
-    local tabBar = Instance.new("Frame")
-    tabBar.Size = UDim2.new(1, -20, 0, 40)
-    tabBar.Position = UDim2.new(0, 10, 0, 55)
-    tabBar.BackgroundTransparency = 1
-    tabBar.Parent = main
+    local tb = Instance.new("Frame")
+    tb.Size = UDim2.new(1, -20, 0, 35)
+    tb.Position = UDim2.new(0, 10, 0, 50)
+    tb.BackgroundTransparency = 1
+    tb.Parent = m
     
-    local tabLayout = Instance.new("UIListLayout")
-    tabLayout.FillDirection = Enum.FillDirection.Horizontal
-    tabLayout.Padding = UDim.new(0, 8)
-    tabLayout.Parent = tabBar
+    local tl = Instance.new("UIListLayout")
+    tl.FillDirection = Enum.FillDirection.Horizontal
+    tl.Padding = UDim.new(0, 5)
+    tl.Parent = tb
     
-    self.UI.TabButtons = {}
-    local tabs = {"Dashboard", "Events", "Executor", "Logs"}
+    self.TBtns = {}
+    local tabs = {"Home", "Events", "Exec", "Logs"}
     
-    for _, name in ipairs(tabs) do
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0, 180, 1, 0)
-        btn.BackgroundColor3 = C.Card
-        btn.Text = name
-        btn.TextColor3 = C.TextDim
-        btn.Font = Enum.Font.GothamBold
-        btn.TextSize = 13
-        btn.BorderSizePixel = 0
-        btn.Parent = tabBar
+    for _, n in ipairs(tabs) do
+        local b = Instance.new("TextButton")
+        b.Size = UDim2.new(0, 160, 1, 0)
+        b.BackgroundColor3 = C.Card
+        b.Text = n
+        b.TextColor3 = C.Gray
+        b.Font = Enum.Font.GothamBold
+        b.TextSize = 12
+        b.BorderSizePixel = 0
+        b.Parent = tb
         
-        local bcorner = Instance.new("UICorner")
-        bcorner.CornerRadius = UDim.new(0, 8)
-        bcorner.Parent = btn
+        local bc = Instance.new("UICorner")
+        bc.CornerRadius = UDim.new(0, 6)
+        bc.Parent = b
         
-        btn.MouseButton1Click:Connect(function()
-            self:SwitchTab(name)
+        b.MouseButton1Click:Connect(function()
+            self:SwTab(n)
         end)
         
-        self.UI.TabButtons[name] = btn
+        self.TBtns[n] = b
     end
     
     -- Content
-    local content = Instance.new("Frame")
-    content.Size = UDim2.new(1, -20, 1, -105)
-    content.Position = UDim2.new(0, 10, 0, 100)
-    content.BackgroundTransparency = 1
-    content.Parent = main
+    local ct = Instance.new("Frame")
+    ct.Size = UDim2.new(1, -20, 1, -95)
+    ct.Position = UDim2.new(0, 10, 0, 90)
+    ct.BackgroundTransparency = 1
+    ct.Parent = m
     
-    self.UI.ContentFrames = {}
+    self.Frames = {}
     
-    for _, name in ipairs(tabs) do
-        local frame = Instance.new("ScrollingFrame")
-        frame.Name = name
-        frame.Size = UDim2.new(1, 0, 1, 0)
-        frame.BackgroundTransparency = 1
-        frame.ScrollBarThickness = 6
-        frame.ScrollBarImageColor3 = C.Primary
-        frame.Visible = false
-        frame.CanvasSize = UDim2.new(0, 0, 0, 0)
-        frame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-        frame.BorderSizePixel = 0
-        frame.Parent = content
+    for _, n in ipairs(tabs) do
+        local f = Instance.new("ScrollingFrame")
+        f.Name = n
+        f.Size = UDim2.new(1, 0, 1, 0)
+        f.BackgroundTransparency = 1
+        f.ScrollBarThickness = 5
+        f.ScrollBarImageColor3 = C.Main
+        f.Visible = false
+        f.CanvasSize = UDim2.new(0, 0, 0, 0)
+        f.AutomaticCanvasSize = Enum.AutomaticSize.Y
+        f.BorderSizePixel = 0
+        f.Parent = ct
         
-        local layout = Instance.new("UIListLayout")
-        layout.Padding = UDim.new(0, 10)
-        layout.Parent = frame
+        local l = Instance.new("UIListLayout")
+        l.Padding = UDim.new(0, 8)
+        l.Parent = f
         
-        self.UI.ContentFrames[name] = frame
+        self.Frames[n] = f
     end
     
-    Log("UI criada!")
-    return true
+    Log("UI OK!")
 end
 
-function Logger:SwitchTab(name)
-    self.CurrentTab = name
+function L:SwTab(n)
+    self.Tab = n
     
-    for n, btn in pairs(self.UI.TabButtons) do
-        btn.BackgroundColor3 = (n == name) and C.Primary or C.Card
-        btn.TextColor3 = (n == name) and C.Text or C.TextDim
+    for nm, b in pairs(self.TBtns) do
+        b.BackgroundColor3 = (nm == n) and C.Main or C.Card
+        b.TextColor3 = (nm == n) and C.Text or C.Gray
     end
     
-    for n, frame in pairs(self.UI.ContentFrames) do
-        frame.Visible = (n == name)
+    for nm, f in pairs(self.Frames) do
+        f.Visible = (nm == n)
     end
     
-    self:RefreshContent()
+    self:Ref()
 end
 
-function Logger:RefreshContent()
-    pcall(function()
-        local frame = self.UI.ContentFrames[self.CurrentTab]
-        if not frame then return end
-        
-        for _, child in ipairs(frame:GetChildren()) do
-            if not child:IsA("UIListLayout") then
-                child:Destroy()
-            end
+function L:Ref()
+    local f = self.Frames[self.Tab]
+    if not f then return end
+    
+    for _, c in ipairs(f:GetChildren()) do
+        if not c:IsA("UIListLayout") then
+            c:Destroy()
         end
-        
-        if self.CurrentTab == "Dashboard" then
-            self:BuildDashboard(frame)
-        elseif self.CurrentTab == "Events" then
-            self:BuildEvents(frame)
-        elseif self.CurrentTab == "Executor" then
-            self:BuildExecutor(frame)
-        elseif self.CurrentTab == "Logs" then
-            self:BuildLogs(frame)
-        end
-    end)
+    end
+    
+    if self.Tab == "Home" then
+        self:BHome(f)
+    elseif self.Tab == "Events" then
+        self:BEvt(f)
+    elseif self.Tab == "Exec" then
+        self:BExec(f)
+    elseif self.Tab == "Logs" then
+        self:BLog(f)
+    end
 end
 
-function Logger:BuildDashboard(parent)
-    local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, 0, 0, 120)
-    card.BackgroundColor3 = C.Card
-    card.BorderSizePixel = 0
-    card.Parent = parent
+function L:BHome(p)
+    local c = Instance.new("Frame")
+    c.Size = UDim2.new(1, 0, 0, 100)
+    c.BackgroundColor3 = C.Card
+    c.BorderSizePixel = 0
+    c.Parent = p
     
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 10)
-    corner.Parent = card
+    local cc = Instance.new("UICorner")
+    cc.CornerRadius = UDim.new(0, 8)
+    cc.Parent = c
     
-    local text = Instance.new("TextLabel")
-    text.Size = UDim2.new(1, -20, 1, -20)
-    text.Position = UDim2.new(0, 10, 0, 10)
-    text.BackgroundTransparency = 1
-    text.Text = string.format([[
-📊 ESTATÍSTICAS
-
-Eventos: %d
-Bloqueados: %d
-Replays: %d
-    ]], self.Stats.Captured, self.Stats.Blocked, self.Stats.Replayed)
-    text.TextColor3 = C.Text
-    text.TextXAlignment = Enum.TextXAlignment.Left
-    text.TextYAlignment = Enum.TextYAlignment.Top
-    text.Font = Enum.Font.Gotham
-    text.TextSize = 14
-    text.Parent = card
+    local t = Instance.new("TextLabel")
+    t.Size = UDim2.new(1, -20, 1, -20)
+    t.Position = UDim2.new(0, 10, 0, 10)
+    t.BackgroundTransparency = 1
+    t.Text = string.format("📊 STATS\n\nEventos: %d\nBloqueados: %d", #self.Events, #self.Blocked)
+    t.TextColor3 = C.Text
+    t.TextXAlignment = Enum.TextXAlignment.Left
+    t.TextYAlignment = Enum.TextYAlignment.Top
+    t.Font = Enum.Font.Gotham
+    t.TextSize = 13
+    t.Parent = c
     
-    -- Botão limpar
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, -20, 0, 40)
-    btn.Position = UDim2.new(0, 10, 0, 0)
-    btn.BackgroundColor3 = C.Danger
-    btn.Text = "🗑️ Limpar Eventos"
-    btn.TextColor3 = C.Text
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 13
-    btn.BorderSizePixel = 0
-    btn.Parent = parent
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1, -20, 0, 35)
+    b.Position = UDim2.new(0, 10, 0, 0)
+    b.BackgroundColor3 = C.Bad
+    b.Text = "🗑️ Limpar"
+    b.TextColor3 = C.Text
+    b.Font = Enum.Font.GothamBold
+    b.TextSize = 12
+    b.BorderSizePixel = 0
+    b.Parent = p
     
-    local bcorner = Instance.new("UICorner")
-    bcorner.CornerRadius = UDim.new(0, 8)
-    bcorner.Parent = btn
+    local bc = Instance.new("UICorner")
+    bc.CornerRadius = UDim.new(0, 6)
+    bc.Parent = b
     
-    btn.MouseButton1Click:Connect(function()
+    b.MouseButton1Click:Connect(function()
         self.Events = {}
-        self.Stats.Captured = 0
-        Log("Eventos limpos")
-        self:RefreshContent()
+        Log("Limpo")
+        self:Ref()
     end)
 end
 
-function Logger:BuildEvents(parent)
+function L:BEvt(p)
     if #self.Events == 0 then
-        local empty = Instance.new("TextLabel")
-        empty.Size = UDim2.new(1, 0, 0, 80)
-        empty.BackgroundColor3 = C.Card
-        empty.Text = "Nenhum evento capturado\nInteraja com o jogo..."
-        empty.TextColor3 = C.TextDim
-        empty.Font = Enum.Font.Gotham
-        empty.TextSize = 13
-        empty.BorderSizePixel = 0
-        empty.Parent = parent
+        local e = Instance.new("TextLabel")
+        e.Size = UDim2.new(1, 0, 0, 60)
+        e.BackgroundColor3 = C.Card
+        e.Text = "Nenhum evento\nInteraja com o jogo"
+        e.TextColor3 = C.Gray
+        e.Font = Enum.Font.Gotham
+        e.TextSize = 12
+        e.BorderSizePixel = 0
+        e.Parent = p
         
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 10)
-        corner.Parent = empty
+        local ec = Instance.new("UICorner")
+        ec.CornerRadius = UDim.new(0, 8)
+        ec.Parent = e
         return
     end
     
-    for i, event in ipairs(self.Events) do
-        if i > 10 then break end
+    for i, ev in ipairs(self.Events) do
+        if i > 8 then break end
         
-        local card = Instance.new("Frame")
-        card.Size = UDim2.new(1, 0, 0, 100)
-        card.BackgroundColor3 = C.Card
-        card.BorderSizePixel = 0
-        card.Parent = parent
+        local c = Instance.new("Frame")
+        c.Size = UDim2.new(1, 0, 0, 85)
+        c.BackgroundColor3 = C.Card
+        c.BorderSizePixel = 0
+        c.Parent = p
         
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 10)
-        corner.Parent = card
+        local cc = Instance.new("UICorner")
+        cc.CornerRadius = UDim.new(0, 8)
+        cc.Parent = c
         
-        local name = Instance.new("TextLabel")
-        name.Size = UDim2.new(1, -200, 0, 20)
-        name.Position = UDim2.new(0, 10, 0, 10)
-        name.BackgroundTransparency = 1
-        name.Text = "📡 " .. event.Name
-        name.TextColor3 = C.Primary
-        name.TextXAlignment = Enum.TextXAlignment.Left
-        name.Font = Enum.Font.GothamBold
-        name.TextSize = 13
-        name.Parent = card
+        local n = Instance.new("TextLabel")
+        n.Size = UDim2.new(1, -180, 0, 18)
+        n.Position = UDim2.new(0, 8, 0, 6)
+        n.BackgroundTransparency = 1
+        n.Text = "📡 " .. ev.N
+        n.TextColor3 = C.Main
+        n.TextXAlignment = Enum.TextXAlignment.Left
+        n.Font = Enum.Font.GothamBold
+        n.TextSize = 12
+        n.Parent = c
         
-        local path = Instance.new("TextLabel")
-        path.Size = UDim2.new(1, -200, 0, 15)
-        path.Position = UDim2.new(0, 10, 0, 32)
-        path.BackgroundTransparency = 1
-        path.Text = event.Path
-        path.TextColor3 = C.TextDim
-        path.TextXAlignment = Enum.TextXAlignment.Left
-        path.Font = Enum.Font.Code
-        path.TextSize = 9
-        path.TextTruncate = Enum.TextTruncate.AtEnd
-        path.Parent = card
+        local pa = Instance.new("TextLabel")
+        pa.Size = UDim2.new(1, -180, 0, 13)
+        pa.Position = UDim2.new(0, 8, 0, 26)
+        pa.BackgroundTransparency = 1
+        pa.Text = ev.P
+        pa.TextColor3 = C.Gray
+        pa.TextXAlignment = Enum.TextXAlignment.Left
+        pa.Font = Enum.Font.Code
+        pa.TextSize = 8
+        pa.TextTruncate = Enum.TextTruncate.AtEnd
+        pa.Parent = c
         
-        local args = Instance.new("TextLabel")
-        args.Size = UDim2.new(1, -200, 0, 15)
-        args.Position = UDim2.new(0, 10, 0, 49)
-        args.BackgroundTransparency = 1
-        args.Text = FormatArgs(event.Args)
-        args.TextColor3 = C.Warning
-        args.TextXAlignment = Enum.TextXAlignment.Left
-        args.Font = Enum.Font.Code
-        args.TextSize = 9
-        args.TextTruncate = Enum.TextTruncate.AtEnd
-        args.Parent = card
+        local a = Instance.new("TextLabel")
+        a.Size = UDim2.new(1, -180, 0, 13)
+        a.Position = UDim2.new(0, 8, 0, 41)
+        a.BackgroundTransparency = 1
+        a.Text = Fmt(ev.A)
+        a.TextColor3 = C.Warn
+        a.TextXAlignment = Enum.TextXAlignment.Left
+        a.Font = Enum.Font.Code
+        a.TextSize = 8
+        a.TextTruncate = Enum.TextTruncate.AtEnd
+        a.Parent = c
         
         -- Botões
-        local btn1 = Instance.new("TextButton")
-        btn1.Size = UDim2.new(0, 50, 0, 25)
-        btn1.Position = UDim2.new(0, 10, 0, 68)
-        btn1.BackgroundColor3 = C.Success
-        btn1.Text = "▶️"
-        btn1.TextColor3 = C.Text
-        btn1.Font = Enum.Font.GothamBold
-        btn1.TextSize = 12
-        btn1.BorderSizePixel = 0
-        btn1.Parent = card
+        local b1 = Instance.new("TextButton")
+        b1.Size = UDim2.new(0, 45, 0, 22)
+        b1.Position = UDim2.new(0, 8, 0, 58)
+        b1.BackgroundColor3 = C.Good
+        b1.Text = "▶️"
+        b1.TextColor3 = C.Text
+        b1.Font = Enum.Font.GothamBold
+        b1.TextSize = 11
+        b1.BorderSizePixel = 0
+        b1.Parent = c
         
-        local c1 = Instance.new("UICorner")
-        c1.CornerRadius = UDim.new(0, 6)
-        c1.Parent = btn1
+        local b1c = Instance.new("UICorner")
+        b1c.CornerRadius = UDim.new(0, 5)
+        b1c.Parent = b1
         
-        btn1.MouseButton1Click:Connect(function()
-            self:Replay(event, 1)
+        b1.MouseButton1Click:Connect(function()
+            self:Rep(ev, 1)
         end)
         
-        local btn2 = Instance.new("TextButton")
-        btn2.Size = UDim2.new(0, 55, 0, 25)
-        btn2.Position = UDim2.new(0, 65, 0, 68)
-        btn2.BackgroundColor3 = C.Primary
-        btn2.Text = "⚡5x"
-        btn2.TextColor3 = C.Text
-        btn2.Font = Enum.Font.GothamBold
-        btn2.TextSize = 11
-        btn2.BorderSizePixel = 0
-        btn2.Parent = card
+        local b2 = Instance.new("TextButton")
+        b2.Size = UDim2.new(0, 48, 0, 22)
+        b2.Position = UDim2.new(0, 58, 0, 58)
+        b2.BackgroundColor3 = C.Main
+        b2.Text = "⚡5"
+        b2.TextColor3 = C.Text
+        b2.Font = Enum.Font.GothamBold
+        b2.TextSize = 10
+        b2.BorderSizePixel = 0
+        b2.Parent = c
         
-        local c2 = Instance.new("UICorner")
-        c2.CornerRadius = UDim.new(0, 6)
-        c2.Parent = btn2
+        local b2c = Instance.new("UICorner")
+        b2c.CornerRadius = UDim.new(0, 5)
+        b2c.Parent = b2
         
-        btn2.MouseButton1Click:Connect(function()
-            self:Replay(event, 5)
+        b2.MouseButton1Click:Connect(function()
+            self:Rep(ev, 5)
         end)
         
-        local btn3 = Instance.new("TextButton")
-        btn3.Size = UDim2.new(0, 55, 0, 25)
-        btn3.Position = UDim2.new(0, 125, 0, 68)
-        btn3.BackgroundColor3 = event.IsLooping and C.Danger or C.Warning
-        btn3.Text = event.IsLooping and "⏹️" or "🔁"
-        btn3.TextColor3 = C.Text
-        btn3.Font = Enum.Font.GothamBold
-        btn3.TextSize = 11
-        btn3.BorderSizePixel = 0
-        btn3.Parent = card
+        local b3 = Instance.new("TextButton")
+        b3.Size = UDim2.new(0, 48, 0, 22)
+        b3.Position = UDim2.new(0, 111, 0, 58)
+        b3.BackgroundColor3 = ev.Loop and C.Bad or C.Warn
+        b3.Text = ev.Loop and "⏹️" or "🔁"
+        b3.TextColor3 = C.Text
+        b3.Font = Enum.Font.GothamBold
+        b3.TextSize = 10
+        b3.BorderSizePixel = 0
+        b3.Parent = c
         
-        local c3 = Instance.new("UICorner")
-        c3.CornerRadius = UDim.new(0, 6)
-        c3.Parent = btn3
+        local b3c = Instance.new("UICorner")
+        b3c.CornerRadius = UDim.new(0, 5)
+        b3c.Parent = b3
         
-        btn3.MouseButton1Click:Connect(function()
-            local loop = self:ToggleLoop(event)
-            btn3.Text = loop and "⏹️" or "🔁"
-            btn3.BackgroundColor3 = loop and C.Danger or C.Warning
+        b3.MouseButton1Click:Connect(function()
+            local l = self:Loop(ev)
+            b3.Text = l and "⏹️" or "🔁"
+            b3.BackgroundColor3 = l and C.Bad or C.Warn
         end)
         
-        local btn4 = Instance.new("TextButton")
-        btn4.Size = UDim2.new(0, 55, 0, 25)
-        btn4.Position = UDim2.new(0, 185, 0, 68)
-        btn4.BackgroundColor3 = C.Danger
-        btn4.Text = "🚫"
-        btn4.TextColor3 = C.Text
-        btn4.Font = Enum.Font.GothamBold
-        btn4.TextSize = 11
-        btn4.BorderSizePixel = 0
-        btn4.Parent = card
+        local b4 = Instance.new("TextButton")
+        b4.Size = UDim2.new(0, 48, 0, 22)
+        b4.Position = UDim2.new(0, 164, 0, 58)
+        b4.BackgroundColor3 = C.Bad
+        b4.Text = "🚫"
+        b4.TextColor3 = C.Text
+        b4.Font = Enum.Font.GothamBold
+        b4.TextSize = 10
+        b4.BorderSizePixel = 0
+        b4.Parent = c
         
-        local c4 = Instance.new("UICorner")
-        c4.CornerRadius = UDim.new(0, 6)
-        c4.Parent = btn4
+        local b4c = Instance.new("UICorner")
+        b4c.CornerRadius = UDim.new(0, 5)
+        b4c.Parent = b4
         
-        btn4.MouseButton1Click:Connect(function()
-            self:ToggleBlock(event.Path)
+        b4.MouseButton1Click:Connect(function()
+            self:Block(ev.P)
             wait(0.1)
-            self:RefreshContent()
+            self:Ref()
         end)
     end
 end
 
-function Logger:BuildExecutor(parent)
-    local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, 0, 0, 350)
-    card.BackgroundColor3 = C.Card
-    card.BorderSizePixel = 0
-    card.Parent = parent
+function L:BExec(p)
+    local c = Instance.new("Frame")
+    c.Size = UDim2.new(1, 0, 0, 300)
+    c.BackgroundColor3 = C.Card
+    c.BorderSizePixel = 0
+    c.Parent = p
     
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 10)
-    corner.Parent = card
+    local cc = Instance.new("UICorner")
+    cc.CornerRadius = UDim.new(0, 8)
+    cc.Parent = c
     
-    local codeBox = Instance.new("TextBox")
-    codeBox.Size = UDim2.new(1, -20, 0, 250)
-    codeBox.Position = UDim2.new(0, 10, 0, 10)
-    codeBox.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
-    codeBox.Text = ""
-    codeBox.PlaceholderText = "-- Cole seu código aqui\nprint('Hello!')"
-    codeBox.TextColor3 = C.Text
-    codeBox.TextXAlignment = Enum.TextXAlignment.Left
-    codeBox.TextYAlignment = Enum.TextYAlignment.Top
-    codeBox.Font = Enum.Font.Code
-    codeBox.TextSize = 12
-    codeBox.MultiLine = true
-    codeBox.ClearTextOnFocus = false
-    codeBox.BorderSizePixel = 0
-    codeBox.Parent = card
+    local tb = Instance.new("TextBox")
+    tb.Size = UDim2.new(1, -20, 0, 220)
+    tb.Position = UDim2.new(0, 10, 0, 10)
+    tb.BackgroundColor3 = Color3.new(0.08, 0.08, 0.11)
+    tb.Text = ""
+    tb.PlaceholderText = "-- Código Lua\nprint('Olá!')"
+    tb.TextColor3 = C.Text
+    tb.TextXAlignment = Enum.TextXAlignment.Left
+    tb.TextYAlignment = Enum.TextYAlignment.Top
+    tb.Font = Enum.Font.Code
+    tb.TextSize = 11
+    tb.MultiLine = true
+    tb.ClearTextOnFocus = false
+    tb.BorderSizePixel = 0
+    tb.Parent = c
     
-    local boxCorner = Instance.new("UICorner")
-    boxCorner.CornerRadius = UDim.new(0, 8)
-    boxCorner.Parent = codeBox
+    local tbc = Instance.new("UICorner")
+    tbc.CornerRadius = UDim.new(0, 6)
+    tbc.Parent = tb
     
-    local btnExec = Instance.new("TextButton")
-    btnExec.Size = UDim2.new(0, 300, 0, 40)
-    btnExec.Position = UDim2.new(0, 10, 0, 270)
-    btnExec.BackgroundColor3 = C.Success
-    btnExec.Text = "▶️ EXECUTAR"
-    btnExec.TextColor3 = C.Text
-    btnExec.Font = Enum.Font.GothamBold
-    btnExec.TextSize = 14
-    btnExec.BorderSizePixel = 0
-    btnExec.Parent = card
+    local be = Instance.new("TextButton")
+    be.Size = UDim2.new(0, 270, 0, 35)
+    be.Position = UDim2.new(0, 10, 0, 240)
+    be.BackgroundColor3 = C.Good
+    be.Text = "▶️ EXECUTAR"
+    be.TextColor3 = C.Text
+    be.Font = Enum.Font.GothamBold
+    be.TextSize = 13
+    be.BorderSizePixel = 0
+    be.Parent = c
     
-    local execCorner = Instance.new("UICorner")
-    execCorner.CornerRadius = UDim.new(0, 8)
-    execCorner.Parent = btnExec
+    local bec = Instance.new("UICorner")
+    bec.CornerRadius = UDim.new(0, 6)
+    bec.Parent = be
     
-    btnExec.MouseButton1Click:Connect(function()
-        self:Execute(codeBox.Text)
+    be.MouseButton1Click:Connect(function()
+        self:Exec(tb.Text)
     end)
     
-    local btnClear = Instance.new("TextButton")
-    btnClear.Size = UDim2.new(0, 150, 0, 40)
-    btnClear.Position = UDim2.new(0, 320, 0, 270)
-    btnClear.BackgroundColor3 = C.Warning
-    btnClear.Text = "🗑️ LIMPAR"
-    btnClear.TextColor3 = C.Text
-    btnClear.Font = Enum.Font.GothamBold
-    btnClear.TextSize = 13
-    btnClear.BorderSizePixel = 0
-    btnClear.Parent = card
+    local bcl = Instance.new("TextButton")
+    bcl.Size = UDim2.new(0, 130, 0, 35)
+    bcl.Position = UDim2.new(0, 290, 0, 240)
+    bcl.BackgroundColor3 = C.Warn
+    bcl.Text = "🗑️ Limpar"
+    bcl.TextColor3 = C.Text
+    bcl.Font = Enum.Font.GothamBold
+    bcl.TextSize = 12
+    bcl.BorderSizePixel = 0
+    bcl.Parent = c
     
-    local clearCorner = Instance.new("UICorner")
-    clearCorner.CornerRadius = UDim.new(0, 8)
-    clearCorner.Parent = btnClear
+    local bclc = Instance.new("UICorner")
+    bclc.CornerRadius = UDim.new(0, 6)
+    bclc.Parent = bcl
     
-    btnClear.MouseButton1Click:Connect(function()
-        codeBox.Text = ""
-        Log("Código limpo")
+    bcl.MouseButton1Click:Connect(function()
+        tb.Text = ""
+        Log("Limpo")
     end)
 end
 
-function Logger:BuildLogs(parent)
+function L:BLog(p)
     if #self.Logs == 0 then
-        local empty = Instance.new("TextLabel")
-        empty.Size = UDim2.new(1, 0, 0, 60)
-        empty.BackgroundColor3 = C.Card
-        empty.Text = "Nenhum log"
-        empty.TextColor3 = C.TextDim
-        empty.Font = Enum.Font.Gotham
-        empty.TextSize = 13
-        empty.BorderSizePixel = 0
-        empty.Parent = parent
+        local e = Instance.new("TextLabel")
+        e.Size = UDim2.new(1, 0, 0, 50)
+        e.BackgroundColor3 = C.Card
+        e.Text = "Sem logs"
+        e.TextColor3 = C.Gray
+        e.Font = Enum.Font.Gotham
+        e.TextSize = 12
+        e.BorderSizePixel = 0
+        e.Parent = p
         
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 10)
-        corner.Parent = empty
+        local ec = Instance.new("UICorner")
+        ec.CornerRadius = UDim.new(0, 8)
+        ec.Parent = e
         return
     end
     
-    for i, log in ipairs(self.Logs) do
-        if i > 15 then break end
+    for i, lg in ipairs(self.Logs) do
+        if i > 12 then break end
         
-        local card = Instance.new("Frame")
-        card.Size = UDim2.new(1, 0, 0, 35)
-        card.BackgroundColor3 = C.Card
-        card.BorderSizePixel = 0
-        card.Parent = parent
+        local c = Instance.new("Frame")
+        c.Size = UDim2.new(1, 0, 0, 30)
+        c.BackgroundColor3 = C.Card
+        c.BorderSizePixel = 0
+        c.Parent = p
         
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 6)
-        corner.Parent = card
+        local cc = Instance.new("UICorner")
+        cc.CornerRadius = UDim.new(0, 5)
+        cc.Parent = c
         
-        local time = Instance.new("TextLabel")
-        time.Size = UDim2.new(0, 60, 1, 0)
-        time.Position = UDim2.new(0, 10, 0, 0)
-        time.BackgroundTransparency = 1
-        time.Text = log.Time
-        time.TextColor3 = C.TextDim
-        time.Font = Enum.Font.Code
-        time.TextSize = 10
-        time.Parent = card
+        local tm = Instance.new("TextLabel")
+        tm.Size = UDim2.new(0, 55, 1, 0)
+        tm.Position = UDim2.new(0, 8, 0, 0)
+        tm.BackgroundTransparency = 1
+        tm.Text = lg.T
+        tm.TextColor3 = C.Gray
+        tm.Font = Enum.Font.Code
+        tm.TextSize = 9
+        tm.Parent = c
         
-        local msg = Instance.new("TextLabel")
-        msg.Size = UDim2.new(1, -80, 1, 0)
-        msg.Position = UDim2.new(0, 75, 0, 0)
-        msg.BackgroundTransparency = 1
-        msg.Text = log.Message
-        msg.TextColor3 = C.Text
-        msg.TextXAlignment = Enum.TextXAlignment.Left
-        msg.Font = Enum.Font.Gotham
-        msg.TextSize = 11
-        msg.TextTruncate = Enum.TextTruncate.AtEnd
-        msg.Parent = card
+        local ms = Instance.new("TextLabel")
+        ms.Size = UDim2.new(1, -70, 1, 0)
+        ms.Position = UDim2.new(0, 65, 0, 0)
+        ms.BackgroundTransparency = 1
+        ms.Text = lg.M
+        ms.TextColor3 = C.Text
+        ms.TextXAlignment = Enum.TextXAlignment.Left
+        ms.Font = Enum.Font.Gotham
+        ms.TextSize = 10
+        ms.TextTruncate = Enum.TextTruncate.AtEnd
+        ms.Parent = c
     end
 end
 
-function Logger:Toggle()
+function L:Tog()
     self.IsOpen = not self.IsOpen
     
-    if not self.UI.Main then return end
+    if not self.Main then return end
     
     if self.IsOpen then
-        self.UI.Main.Visible = true
-        self.UI.Main.Size = UDim2.new(0, 0, 0, 0)
+        self.Main.Visible = true
+        self.Main.Size = UDim2.new(0, 0, 0, 0)
         
-        if TweenService then
-            TweenService:Create(self.UI.Main, 
-                TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-                {Size = UDim2.new(0, 800, 0, 550)}):Play()
-        else
-            self.UI.Main.Size = UDim2.new(0, 800, 0, 550)
-        end
+        Tw:Create(self.Main, 
+            TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+            {Size = UDim2.new(0, 700, 0, 500)}):Play()
         
         wait(0.2)
-        self:RefreshContent()
+        self:Ref()
     else
-        if TweenService then
-            TweenService:Create(self.UI.Main, 
-                TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.In),
-                {Size = UDim2.new(0, 0, 0, 0)}):Play()
-            wait(0.2)
-        end
-        self.UI.Main.Visible = false
+        Tw:Create(self.Main, 
+            TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.In),
+            {Size = UDim2.new(0, 0, 0, 0)}):Play()
+        
+        wait(0.2)
+        self.Main.Visible = false
     end
 end
 
-function Logger:SetupKeybind()
-    if not UserInputService then return end
-    
-    UserInputService.InputBegan:Connect(function(input, processed)
-        if not processed and input.KeyCode == OPEN_KEY then
-            pcall(function()
-                self:Toggle()
-            end)
+function L:Key()
+    Inp.InputBegan:Connect(function(i, p)
+        if not p and i.KeyCode == KEY then
+            self:Tog()
         end
     end)
 end
 
-function Logger:Init()
-    Log("Iniciando SHAKA LOGGER...")
+function L:Go()
+    Log("Iniciando...")
     
-    -- Verificar features
-    Log("Verificando executor...")
-    
-    local features = {
-        hookmetamethod = hookmetamethod ~= nil,
-        getnamecallmethod = getnamecallmethod ~= nil,
-        loadstring = loadstring ~= nil,
-        setclipboard = setclipboard ~= nil
-    }
-    
-    for name, has in pairs(features) do
-        Log((has and "✅" or "❌") .. " " .. name)
-    end
-    
-    -- Criar UI
     wait(0.3)
-    local uiOk = self:CreateUI()
+    self:UI()
     
-    if not uiOk then
-        Log("ERRO: Falha ao criar UI")
-        return false
-    end
-    
-    -- Setup keybind
     wait(0.2)
-    self:SetupKeybind()
-    Log("Keybind configurado [F]")
+    self:Key()
+    Log("Keybind [F]")
     
-    -- Hook
     wait(0.3)
-    self:InstallHook()
+    self:Hook()
     
-    Log("✅ SHAKA LOGGER PRONTO!")
-    Log("Pressione [F] para abrir")
+    Log("✅ PRONTO!")
+    Log("Pressione [F]")
     
-    -- Abrir automaticamente
     wait(1)
-    self:Toggle()
+    self:Tog()
     wait(0.2)
-    self:SwitchTab("Dashboard")
-    
-    return true
+    self:SwTab("Home")
 end
 
--- Executar inicialização
-Log("Aguardando 2 segundos...")
-wait(2)
+-- Start
+Log("Aguardando...")
+wait(1)
 
-local success, err = pcall(function()
-    Logger:Init()
+local ok, err = pcall(function()
+    L:Go()
 end)
 
-if not success then
-    Log("ERRO na inicialização:")
-    Log(tostring(err))
+if not ok then
+    Log("ERRO: " .. tostring(err))
     print("[SHAKA] ERRO:", err)
 end
 
--- Exportar globalmente
-_G.ShakaLogger = Logger
-shared.ShakaLogger = Logger
+print("[SHAKA] ✅ Carregado!")
+print("[SHAKA] Use _G.Shaka ou getgenv().Shaka")
 
-Log("SHAKA Logger carregado na variável global!")
-print("[SHAKA] ✅ Carregado! Use _G.ShakaLogger")
-
-return Logger
+return L
