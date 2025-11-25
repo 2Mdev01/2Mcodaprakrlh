@@ -537,46 +537,6 @@ local function GetPlayerDistance(player)
     return (LocalPlayer.Character.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
 end
 
-local function REBOLAR_LENTINHO()
-    -- Verifica se o personagem existe
-    if not game.Players.LocalPlayer.Character then
-        return
-    end
-    
-    local character = game.Players.LocalPlayer.Character
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    
-    -- Verifica se o humanoid existe
-    if not humanoid then
-        return
-    end
-    
-    -- Carrega a animação de rebolado lento
-    local animation = Instance.new("Animation")
-    animation.AnimationId = "rbxassetid://" -- Coloque aqui o ID da animação
-    
-    -- Carrega a animação no humanoid
-    local animTrack = humanoid:LoadAnimation(animation)
-    
-    -- Configura a velocidade para ser bem lenta
-    animTrack:AdjustSpeed(0.3) -- 30% da velocidade normal
-    
-    -- Toca a animação
-    animTrack:Play()
-    
-    -- Opcional: Emite som de música lenta se quiser
-    -- local sound = Instance.new("Sound")
-    -- sound.SoundId = "rbxassetid://" -- ID do som
-    -- sound.Parent = character.Head
-    -- sound:Play()
-    
-    print("🎵 REBOLANDO LENTINHO! 🎵")
-    
-    -- Retorna a track de animação para poder controlar depois
-    return animTrack
-end
-
-
 -- ══════════════════════════════════════════════════════════
 -- SISTEMA DE AIMBOT
 -- ══════════════════════════════════════════════════════════
@@ -1985,7 +1945,7 @@ local function CreateGUI()
     CreateSlider("Velocidade NOCLIP", 10, 300, SavedStates.FlySpeed, function(v) 
         SavedStates.FlySpeed = v 
     end, tabFrames["Player"], "⚡")
-    CreateToggle("REBOLAR", REBOLAR_LENTINHO, tabFrames["Player"], "✈️")
+    
     CreateToggle("Pulo Infinito", ToggleInfJump, tabFrames["Player"], "🦘")
     
     CreateSection("VELOCIDADE", tabFrames["Player"])
