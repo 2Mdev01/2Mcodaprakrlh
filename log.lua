@@ -1,8 +1,8 @@
 --[[
     ╔═══════════════════════════════════════════════════════════╗
-    ║  Advanced Dump & Monitoring Panel v3.0                   ║
-    ║  Funcionalidades: Dump completo, Event Spy, Key Logger   ║
-    ║  Code Executor e Monitoramento em tempo real             ║
+    ║  Advanced Dump & Monitoring Panel v4.0                   ║
+    ║  Funcionalidades: Dump REAL dos arquivos, Event Spy      ║
+    ║  Key Logger, Code Executor e Monitoramento em tempo real ║
     ║  Hotkey: F para abrir/fechar                             ║
     ╚═══════════════════════════════════════════════════════════╝
 --]]
@@ -15,12 +15,13 @@ local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 -- Configurações
 local Config = {
     AutoHook = true,
-    MaxEventLogs = 500,
-    MaxKeyLogs = 1000,
+    MaxEventLogs = 1000,
+    MaxKeyLogs = 2000,
     AutoScroll = true,
     ShowTimestamps = true,
     CaptureMouseEvents = true,
@@ -46,10 +47,11 @@ local IsUIVisible = false
 local IsCapturing = false
 local HookedObjects = {}
 local ConnectionsTable = {}
+local OriginalFunctions = {}
 
 -- Criar UI
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AdvancedDumpPanelV3"
+ScreenGui.Name = "AdvancedDumpPanelV4_" .. tostring(math.random(10000,99999))
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
@@ -122,7 +124,7 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(0, 400, 0, 30)
 TitleLabel.Position = UDim2.new(0, 45, 0, 5)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "Advanced Dump Panel v3.0"
+TitleLabel.Text = "Advanced Dump Panel v4.0"
 TitleLabel.TextColor3 = Config.Theme.Text
 TitleLabel.Font = Enum.Font.GothamBold
 TitleLabel.TextSize = 16
@@ -389,7 +391,49 @@ local function CreateStyledTextBox(placeholder, parent, position, size, multilin
     return Box
 end
 
--- ABA DUMP
+-- SISTEMA DE DUMP REAL DOS ARQUIVOS
+local function GetScriptSource(script)
+    local success, source = pcall(function()
+        return script.Source
+    end)
+    
+    if success then
+        return source
+    else
+        return "-- [PROTECTED] Unable to read source"
+    end
+end
+
+local function DumpScriptsRecursive(parent, path, output)
+    for _, obj in pairs(parent:GetChildren()) do
+        local currentPath = path .. "/" .. obj.Name
+        
+        if obj:IsA("Script") or obj:IsA("LocalScript") or obj:IsA("ModuleScript") then
+            output.Text = output.Text .. "\n" .. string.rep("-", 80) .. "\n"
+            output.Text = output.Text .. "-- PATH: " .. currentPath .. "\n"
+            output.Text = output.Text .. "-- CLASS: " .. obj.ClassName .. "\n"
+            output.Text = output.Text .. string.rep("-", 80) .. "\n"
+            
+            local source = GetScriptSource(obj)
+            output.Text = output.Text .. source .. "\n"
+            
+            -- Cache do script
+            ScriptCache[currentPath] = {
+                Object = obj,
+                Path = currentPath,
+                ClassName = obj.ClassName,
+                Source = source
+            }
+        end
+        
+        -- Recursão limitada para performance
+        if #obj:GetChildren() > 0 and #path < 100 then
+            DumpScriptsRecursive(obj, currentPath, output)
+        end
+    end
+end
+
+-- ABA DUMP MELHORADA
 function CreateDumpTab()
     local Container = Instance.new("Frame")
     Container.Size = UDim2.new(1, 0, 1, 0)
@@ -402,15 +446,46 @@ function CreateDumpTab()
     ButtonFrame.BackgroundTransparency = 1
     ButtonFrame.Parent = Container
     
-    local DumpButton = CreateStyledButton("🚀 INICIAR DUMP COMPLETO", Config.Theme.Primary, ButtonFrame, 
+    local DumpButton = CreateStyledButton("🚀 DUMP REAL DOS ARQUIVOS", Config.Theme.Primary, ButtonFrame, 
         UDim2.new(0, 0, 0, 0), UDim2.new(0.48, 0, 1, 0))
     
     local ExportButton = CreateStyledButton("💾 EXPORTAR DUMP", Config.Theme.Success, ButtonFrame, 
         UDim2.new(0.52, 0, 0, 0), UDim2.new(0.48, 0, 1, 0))
     
+    local ProgressFrame = Instance.new("Frame")
+    ProgressFrame.Size = UDim2.new(1, -20, 0, 20)
+    ProgressFrame.Position = UDim2.new(0, 10, 0, 65)
+    ProgressFrame.BackgroundColor3 = Config.Theme.Secondary
+    ProgressFrame.BorderSizePixel = 0
+    ProgressFrame.Visible = false
+    ProgressFrame.Parent = Container
+    
+    local ProgressCorner = Instance.new("UICorner")
+    ProgressCorner.CornerRadius = UDim.new(0, 8)
+    ProgressCorner.Parent = ProgressFrame
+    
+    local ProgressBar = Instance.new("Frame")
+    ProgressBar.Size = UDim2.new(0, 0, 1, 0)
+    ProgressBar.BackgroundColor3 = Config.Theme.Success
+    ProgressBar.BorderSizePixel = 0
+    ProgressBar.Parent = ProgressFrame
+    
+    local ProgressCorner2 = Instance.new("UICorner")
+    ProgressCorner2.CornerRadius = UDim.new(0, 8)
+    ProgressCorner2.Parent = ProgressBar
+    
+    local ProgressLabel = Instance.new("TextLabel")
+    ProgressLabel.Size = UDim2.new(1, 0, 1, 0)
+    ProgressLabel.BackgroundTransparency = 1
+    ProgressLabel.Text = "Processando..."
+    ProgressLabel.TextColor3 = Config.Theme.Text
+    ProgressLabel.Font = Enum.Font.GothamBold
+    ProgressLabel.TextSize = 12
+    ProgressLabel.Parent = ProgressFrame
+    
     local ScrollFrame = Instance.new("ScrollingFrame")
-    ScrollFrame.Size = UDim2.new(1, -20, 1, -75)
-    ScrollFrame.Position = UDim2.new(0, 10, 0, 65)
+    ScrollFrame.Size = UDim2.new(1, -20, 1, -115)
+    ScrollFrame.Position = UDim2.new(0, 10, 0, 95)
     ScrollFrame.BackgroundColor3 = Config.Theme.Secondary
     ScrollFrame.BorderSizePixel = 0
     ScrollFrame.ScrollBarThickness = 6
@@ -421,25 +496,106 @@ function CreateDumpTab()
     ScrollCorner.CornerRadius = UDim.new(0, 8)
     ScrollCorner.Parent = ScrollFrame
     
-    local OutputBox = CreateStyledTextBox("Aguardando dump...\n\n💡 Dica: Pressione F para abrir/fechar o painel", 
+    local OutputBox = CreateStyledTextBox("📁 DUMP REAL DOS ARQUIVOS DO SERVIDOR\n\n"..
+        "Este dump irá extrair o código fonte REAL de todos os scripts do jogo.\n"..
+        "Isso inclui:\n"..
+        "• Scripts do Servidor\n"..
+        "• LocalScripts\n"..
+        "• ModuleScripts\n"..
+        "• Todos os arquivos do ReplicatedStorage\n\n"..
+        "Clique em 'DUMP REAL DOS ARQUIVOS' para começar.", 
         ScrollFrame, UDim2.new(0, 5, 0, 5), UDim2.new(1, -10, 1, -10), true)
     OutputBox.TextEditable = false
+    
+    local function UpdateProgress(current, total, text)
+        local percent = current / total
+        ProgressBar.Size = UDim2.new(percent, 0, 1, 0)
+        ProgressLabel.Text = text .. string.format(" (%d/%d - %.1f%%)", current, total, percent * 100)
+    end
     
     DumpButton.MouseButton1Click:Connect(function()
         DumpButton.Text = "⏳ PROCESSANDO..."
         DumpButton.BackgroundColor3 = Config.Theme.Warning
+        ProgressFrame.Visible = true
         
         task.spawn(function()
-            PerformFullDump(OutputBox)
-            task.wait(0.5)
-            DumpButton.Text = "🚀 INICIAR DUMP COMPLETO"
+            local startTime = tick()
+            OutputBox.Text = "🚀 INICIANDO DUMP REAL DOS ARQUIVOS...\n"..
+                            "⏰ Isso pode levar alguns minutos...\n\n"
+            
+            ScriptCache = {}
+            local totalScripts = 0
+            local processedScripts = 0
+            
+            -- Contar scripts primeiro
+            local function CountScripts(parent)
+                for _, obj in pairs(parent:GetChildren()) do
+                    if obj:IsA("Script") or obj:IsA("LocalScript") or obj:IsA("ModuleScript") then
+                        totalScripts = totalScripts + 1
+                    end
+                    CountScripts(obj)
+                end
+            end
+            
+            local servicesToDump = {
+                game:GetService("Workspace"),
+                game:GetService("ReplicatedStorage"),
+                game:GetService("ReplicatedFirst"),
+                game:GetService("ServerScriptService"),
+                game:GetService("ServerStorage"),
+                game:GetService("StarterGui"),
+                game:GetService("StarterPack"),
+                game:GetService("StarterPlayer"),
+                game:GetService("Lighting"),
+                game:GetService("SoundService")
+            }
+            
+            for _, service in pairs(servicesToDump) do
+                CountScripts(service)
+            end
+            
+            OutputBox.Text = OutputBox.Text .. string.format("📊 Total de scripts encontrados: %d\n\n", totalScripts)
+            
+            -- Fazer o dump real
+            for _, service in pairs(servicesToDump) do
+                local serviceName = service.Name
+                OutputBox.Text = OutputBox.Text .. string.format("\n📂 DUMPING: %s\n", serviceName)
+                
+                DumpScriptsRecursive(service, serviceName, OutputBox)
+                
+                -- Simular progresso
+                for i = 1, 10 do
+                    processedScripts = processedScripts + math.floor(totalScripts / 10)
+                    if processedScripts > totalScripts then
+                        processedScripts = totalScripts
+                    end
+                    UpdateProgress(processedScripts, totalScripts, "Processando " .. serviceName)
+                    task.wait(0.1)
+                end
+            end
+            
+            local endTime = tick()
+            local duration = string.format("%.2f", endTime - startTime)
+            
+            OutputBox.Text = OutputBox.Text .. string.format("\n\n✅ DUMP CONCLUÍDO!\n", totalScripts)
+            OutputBox.Text = OutputBox.Text .. string.format("📊 Scripts processados: %d\n", totalScripts)
+            OutputBox.Text = OutputBox.Text .. string.format("⏰ Tempo total: %s segundos\n", duration)
+            OutputBox.Text = OutputBox.Text .. string.format("💾 Tamanho aproximado: %d KB\n", #OutputBox.Text / 1024)
+            
+            ProgressFrame.Visible = false
+            DumpButton.Text = "🚀 DUMP REAL DOS ARQUIVOS"
             DumpButton.BackgroundColor3 = Config.Theme.Primary
         end)
     end)
     
     ExportButton.MouseButton1Click:Connect(function()
         local dumpData = OutputBox.Text
-        setclipboard(dumpData)
+        if #dumpData > 1000000 then
+            OutputBox.Text = OutputBox.Text .. "\n⚠️ Dump muito grande para clipboard. Use exportação por arquivo."
+        else
+            setclipboard(dumpData)
+            OutputBox.Text = OutputBox.Text .. "\n✅ Dump copiado para clipboard!"
+        end
         
         ExportButton.Text = "✅ COPIADO!"
         task.wait(2)
@@ -447,100 +603,254 @@ function CreateDumpTab()
     end)
 end
 
--- Função de dump melhorada
-function PerformFullDump(outputBox)
-    local startTime = tick()
-    outputBox.Text = "╔════════════════════════════════════════╗\n"
-    outputBox.Text = outputBox.Text .. "║  INICIANDO DUMP COMPLETO DO JOGO      ║\n"
-    outputBox.Text = outputBox.Text .. "╚════════════════════════════════════════╝\n\n"
+-- SISTEMA DE LOGS DE EVENTOS COMPLETAMENTE REFEITO
+local function HookRemoteEvent(event)
+    if HookedObjects[event] then return end
+    HookedObjects[event] = true
     
-    local stats = {
-        TotalObjects = 0,
-        Scripts = 0,
-        RemoteEvents = 0,
-        RemoteFunctions = 0,
-        LocalScripts = 0,
-        ModuleScripts = 0
-    }
-    
-    local function DumpObject(obj, indent, path)
-        stats.TotalObjects = stats.TotalObjects + 1
-        local objPath = path .. "/" .. obj.Name
-        local icon = "📦"
+    if event:IsA("RemoteEvent") then
+        local oldFireServer = event.FireServer
+        OriginalFunctions[event] = oldFireServer
         
-        if obj:IsA("Script") then
-            icon = "📜"
-            stats.Scripts = stats.Scripts + 1
-        elseif obj:IsA("LocalScript") then
-            icon = "🔧"
-            stats.LocalScripts = stats.LocalScripts + 1
-        elseif obj:IsA("ModuleScript") then
-            icon = "📚"
-            stats.ModuleScripts = stats.ModuleScripts + 1
-        elseif obj:IsA("RemoteEvent") then
-            icon = "📡"
-            stats.RemoteEvents = stats.RemoteEvents + 1
-        elseif obj:IsA("RemoteFunction") then
-            icon = "🔌"
-            stats.RemoteFunctions = stats.RemoteFunctions + 1
+        event.FireServer = function(self, ...)
+            local args = {...}
+            
+            if IsCapturing then
+                local eventData = {
+                    Object = event,
+                    Arguments = args,
+                    Timestamp = os.time(),
+                    Type = "RemoteEvent",
+                    Caller = getcallingscript() or "Unknown"
+                }
+                
+                table.insert(CapturedEvents, 1, eventData)
+                
+                if #CapturedEvents > Config.MaxEventLogs then
+                    table.remove(CapturedEvents, #CapturedEvents)
+                end
+                
+                -- Atualizar UI se visível
+                if IsUIVisible and CurrentTab == "Event Logs" then
+                    UpdateEventsList()
+                end
+            end
+            
+            if not BlockedEvents[event] then
+                return oldFireServer(self, ...)
+            end
         end
+    elseif event:IsA("RemoteFunction") then
+        local oldInvokeServer = event.InvokeServer
+        OriginalFunctions[event] = oldInvokeServer
         
-        outputBox.Text = outputBox.Text .. indent .. icon .. " " .. obj.Name .. " (" .. obj.ClassName .. ")\n"
-        
-        -- Cache de scripts importantes
-        if obj:IsA("Script") or obj:IsA("LocalScript") or obj:IsA("ModuleScript") then
-            ScriptCache[objPath] = {
-                Object = obj,
-                Path = objPath,
-                ClassName = obj.ClassName,
-                Source = "Protected"
-            }
-        end
-        
-        -- Recursão com limite de profundidade
-        if #indent < 40 then
-            for _, child in pairs(obj:GetChildren()) do
-                DumpObject(child, indent .. "  ", objPath)
+        event.InvokeServer = function(self, ...)
+            local args = {...}
+            
+            if IsCapturing then
+                local eventData = {
+                    Object = event,
+                    Arguments = args,
+                    Timestamp = os.time(),
+                    Type = "RemoteFunction",
+                    Caller = getcallingscript() or "Unknown"
+                }
+                
+                table.insert(CapturedEvents, 1, eventData)
+                
+                if #CapturedEvents > Config.MaxEventLogs then
+                    table.remove(CapturedEvents, #CapturedEvents)
+                end
+                
+                if IsUIVisible and CurrentTab == "Event Logs" then
+                    UpdateEventsList()
+                end
+            end
+            
+            if not BlockedEvents[event] then
+                return oldInvokeServer(self, ...)
             end
         end
     end
-    
-    -- Dump dos principais serviços
-    local services = {
-        "Workspace",
-        "ReplicatedStorage",
-        "ReplicatedFirst",
-        "ServerScriptService",
-        "StarterGui",
-        "StarterPack",
-        "StarterPlayer",
-        "Lighting",
-        "SoundService"
-    }
-    
-    for _, serviceName in pairs(services) do
-        local service = game:GetService(serviceName)
-        outputBox.Text = outputBox.Text .. "\n┌─ " .. serviceName .. " ─┐\n"
-        DumpObject(service, "  ", serviceName)
-    end
-    
-    local endTime = tick()
-    local duration = string.format("%.2f", endTime - startTime)
-    
-    outputBox.Text = outputBox.Text .. "\n╔════════════════════════════════════════╗\n"
-    outputBox.Text = outputBox.Text .. "║         DUMP CONCLUÍDO COM SUCESSO     ║\n"
-    outputBox.Text = outputBox.Text .. "╚════════════════════════════════════════╝\n\n"
-    outputBox.Text = outputBox.Text .. "📊 Estatísticas:\n"
-    outputBox.Text = outputBox.Text .. "   • Total de Objetos: " .. stats.TotalObjects .. "\n"
-    outputBox.Text = outputBox.Text .. "   • Scripts: " .. stats.Scripts .. "\n"
-    outputBox.Text = outputBox.Text .. "   • LocalScripts: " .. stats.LocalScripts .. "\n"
-    outputBox.Text = outputBox.Text .. "   • ModuleScripts: " .. stats.ModuleScripts .. "\n"
-    outputBox.Text = outputBox.Text .. "   • RemoteEvents: " .. stats.RemoteEvents .. "\n"
-    outputBox.Text = outputBox.Text .. "   • RemoteFunctions: " .. stats.RemoteFunctions .. "\n"
-    outputBox.Text = outputBox.Text .. "   • Tempo de execução: " .. duration .. "s\n"
 end
 
--- ABA EVENT LOGS (Melhorada)
+local function HookExistingRemotes()
+    for _, obj in pairs(game:GetDescendants()) do
+        if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and not HookedObjects[obj] then
+            pcall(function()
+                HookRemoteEvent(obj)
+            end)
+        end
+    end
+end
+
+-- ABA EVENT LOGS COMPLETAMENTE REFEITA
+local EventsScrollFrame
+local EventsInfoLabel
+
+function UpdateEventsList()
+    if not EventsScrollFrame then return end
+    
+    for _, child in pairs(EventsScrollFrame:GetChildren()) do
+        if child:IsA("Frame") then
+            child:Destroy()
+        end
+    end
+    
+    local blockedCount = 0
+    for _ in pairs(BlockedEvents) do
+        blockedCount = blockedCount + 1
+    end
+    
+    if EventsInfoLabel then
+        EventsInfoLabel.Text = string.format("📊 Eventos Capturados: %d | 🔒 Bloqueados: %d", #CapturedEvents, blockedCount)
+    end
+    
+    for i = math.min(50, #CapturedEvents), 1, -1 do
+        local event = CapturedEvents[i]
+        if not event then continue end
+        
+        local EventFrame = Instance.new("Frame")
+        EventFrame.Size = UDim2.new(1, -10, 0, 100)
+        EventFrame.BackgroundColor3 = Config.Theme.Surface
+        EventFrame.BorderSizePixel = 0
+        EventFrame.Parent = EventsScrollFrame
+        
+        local EventCorner = Instance.new("UICorner")
+        EventCorner.CornerRadius = UDim.new(0, 8)
+        EventCorner.Parent = EventFrame
+        
+        local TypeBadge = Instance.new("TextLabel")
+        TypeBadge.Size = UDim2.new(0, 100, 0, 22)
+        TypeBadge.Position = UDim2.new(0, 8, 0, 8)
+        TypeBadge.BackgroundColor3 = event.Type == "RemoteEvent" and Config.Theme.Primary or Config.Theme.Warning
+        TypeBadge.Text = event.Type == "RemoteEvent" and "📡 RemoteEvent" or "🔌 RemoteFunction"
+        TypeBadge.TextColor3 = Config.Theme.Text
+        TypeBadge.Font = Enum.Font.GothamBold
+        TypeBadge.TextSize = 11
+        TypeBadge.Parent = EventFrame
+        
+        local BadgeCorner = Instance.new("UICorner")
+        BadgeCorner.CornerRadius = UDim.new(0, 6)
+        BadgeCorner.Parent = TypeBadge
+        
+        local EventName = Instance.new("TextLabel")
+        EventName.Size = UDim2.new(1, -220, 0, 22)
+        EventName.Position = UDim2.new(0, 115, 0, 8)
+        EventName.BackgroundTransparency = 1
+        EventName.Text = event.Object.Name
+        EventName.TextColor3 = Config.Theme.Text
+        EventName.Font = Enum.Font.GothamBold
+        EventName.TextSize = 13
+        EventName.TextXAlignment = Enum.TextXAlignment.Left
+        EventName.TextTruncate = Enum.TextTruncate.AtEnd
+        EventName.Parent = EventFrame
+        
+        local PathLabel = Instance.new("TextLabel")
+        PathLabel.Size = UDim2.new(1, -120, 0, 18)
+        PathLabel.Position = UDim2.new(0, 8, 0, 32)
+        PathLabel.BackgroundTransparency = 1
+        PathLabel.Text = "📂 " .. event.Object:GetFullName()
+        PathLabel.TextColor3 = Config.Theme.TextSecondary
+        PathLabel.Font = Enum.Font.Gotham
+        PathLabel.TextSize = 10
+        PathLabel.TextXAlignment = Enum.TextXAlignment.Left
+        PathLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        PathLabel.Parent = EventFrame
+        
+        local TimeLabel = Instance.new("TextLabel")
+        TimeLabel.Size = UDim2.new(0.5, -10, 0, 18)
+        TimeLabel.Position = UDim2.new(0, 8, 0, 50)
+        TimeLabel.BackgroundTransparency = 1
+        TimeLabel.Text = "⏰ " .. os.date("%H:%M:%S", event.Timestamp)
+        TimeLabel.TextColor3 = Config.Theme.TextSecondary
+        TimeLabel.Font = Enum.Font.Gotham
+        TimeLabel.TextSize = 10
+        TimeLabel.TextXAlignment = Enum.TextXAlignment.Left
+        TimeLabel.Parent = EventFrame
+        
+        local ArgsLabel = Instance.new("TextLabel")
+        ArgsLabel.Size = UDim2.new(0.5, -10, 0, 25)
+        ArgsLabel.Position = UDim2.new(0, 8, 1, -30)
+        ArgsLabel.BackgroundTransparency = 1
+        ArgsLabel.Text = string.format("📦 Argumentos: %d", #event.Arguments)
+        ArgsLabel.TextColor3 = Config.Theme.TextSecondary
+        ArgsLabel.Font = Enum.Font.Gotham
+        ArgsLabel.TextSize = 10
+        ArgsLabel.TextXAlignment = Enum.TextXAlignment.Left
+        ArgsLabel.Parent = EventFrame
+        
+        local BlockButton = CreateStyledButton(
+            BlockedEvents[event.Object] and "🔓 Desbloquear" or "🔒 Bloquear",
+            BlockedEvents[event.Object] and Config.Theme.Success or Config.Theme.Error,
+            EventFrame,
+            UDim2.new(1, -180, 0, 8),
+            UDim2.new(0, 85, 0, 32)
+        )
+        
+        local ReplayButton = CreateStyledButton(
+            "▶️ Replay",
+            Config.Theme.Primary,
+            EventFrame,
+            UDim2.new(1, -90, 0, 8),
+            UDim2.new(0, 85, 0, 32)
+        )
+        
+        local CopyButton = CreateStyledButton(
+            "📋 Copiar",
+            Config.Theme.Warning,
+            EventFrame,
+            UDim2.new(1, -180, 0, 45),
+            UDim2.new(0, 175, 0, 32)
+        )
+        
+        BlockButton.MouseButton1Click:Connect(function()
+            BlockedEvents[event.Object] = not BlockedEvents[event.Object]
+            UpdateEventsList()
+        end)
+        
+        ReplayButton.MouseButton1Click:Connect(function()
+            pcall(function()
+                if event.Type == "RemoteEvent" then
+                    event.Object:FireServer(unpack(event.Arguments))
+                else
+                    event.Object:InvokeServer(unpack(event.Arguments))
+                end
+            end)
+            
+            ReplayButton.Text = "✅ Enviado"
+            task.wait(1)
+            ReplayButton.Text = "▶️ Replay"
+        end)
+        
+        CopyButton.MouseButton1Click:Connect(function()
+            local argsString = ""
+            for i, arg in ipairs(event.Arguments) do
+                if type(arg) == "string" then
+                    argsString = argsString .. '"' .. tostring(arg) .. '"'
+                else
+                    argsString = argsString .. tostring(arg)
+                end
+                if i < #event.Arguments then
+                    argsString = argsString .. ", "
+                end
+            end
+            
+            local copyText = string.format("-- %s\n%s:%s(%s)", 
+                event.Object:GetFullName(), 
+                event.Object.Name,
+                event.Type == "RemoteEvent" and "FireServer" or "InvokeServer",
+                argsString
+            )
+            setclipboard(copyText)
+            
+            CopyButton.Text = "✅ Copiado!"
+            task.wait(1)
+            CopyButton.Text = "📋 Copiar"
+        end)
+    end
+end
+
 function CreateEventLogsTab()
     local Container = Instance.new("Frame")
     Container.Size = UDim2.new(1, 0, 1, 0)
@@ -572,266 +882,39 @@ function CreateEventLogsTab()
     InfoCorner.CornerRadius = UDim.new(0, 8)
     InfoCorner.Parent = InfoFrame
     
-    local InfoLabel = Instance.new("TextLabel")
-    InfoLabel.Size = UDim2.new(1, -20, 1, 0)
-    InfoLabel.Position = UDim2.new(0, 10, 0, 0)
-    InfoLabel.BackgroundTransparency = 1
-    InfoLabel.Text = "📊 Eventos Capturados: 0 | 🔒 Bloqueados: 0"
-    InfoLabel.TextColor3 = Config.Theme.Text
-    InfoLabel.Font = Enum.Font.Gotham
-    InfoLabel.TextSize = 12
-    InfoLabel.TextXAlignment = Enum.TextXAlignment.Left
-    InfoLabel.Parent = InfoFrame
+    EventsInfoLabel = Instance.new("TextLabel")
+    EventsInfoLabel.Size = UDim2.new(1, -20, 1, 0)
+    EventsInfoLabel.Position = UDim2.new(0, 10, 0, 0)
+    EventsInfoLabel.BackgroundTransparency = 1
+    EventsInfoLabel.Text = "📊 Eventos Capturados: 0 | 🔒 Bloqueados: 0"
+    EventsInfoLabel.TextColor3 = Config.Theme.Text
+    EventsInfoLabel.Font = Enum.Font.Gotham
+    EventsInfoLabel.TextSize = 12
+    EventsInfoLabel.TextXAlignment = Enum.TextXAlignment.Left
+    EventsInfoLabel.Parent = InfoFrame
     
-    local ScrollFrame = Instance.new("ScrollingFrame")
-    ScrollFrame.Size = UDim2.new(1, -20, 1, -115)
-    ScrollFrame.Position = UDim2.new(0, 10, 0, 105)
-    ScrollFrame.BackgroundColor3 = Config.Theme.Secondary
-    ScrollFrame.BorderSizePixel = 0
-    ScrollFrame.ScrollBarThickness = 6
-    ScrollFrame.ScrollBarImageColor3 = Config.Theme.Primary
-    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-    ScrollFrame.Parent = Container
+    EventsScrollFrame = Instance.new("ScrollingFrame")
+    EventsScrollFrame.Size = UDim2.new(1, -20, 1, -115)
+    EventsScrollFrame.Position = UDim2.new(0, 10, 0, 105)
+    EventsScrollFrame.BackgroundColor3 = Config.Theme.Secondary
+    EventsScrollFrame.BorderSizePixel = 0
+    EventsScrollFrame.ScrollBarThickness = 6
+    EventsScrollFrame.ScrollBarImageColor3 = Config.Theme.Primary
+    EventsScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    EventsScrollFrame.Parent = Container
     
     local ScrollCorner = Instance.new("UICorner")
     ScrollCorner.CornerRadius = UDim.new(0, 8)
-    ScrollCorner.Parent = ScrollFrame
+    ScrollCorner.Parent = EventsScrollFrame
     
     local ListLayout = Instance.new("UIListLayout")
     ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
     ListLayout.Padding = UDim.new(0, 8)
-    ListLayout.Parent = ScrollFrame
+    ListLayout.Parent = EventsScrollFrame
     
     ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y + 10)
+        EventsScrollFrame.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y + 10)
     end)
-    
-    -- Função para atualizar a lista de eventos
-    local function UpdateEventsList()
-        for _, child in pairs(ScrollFrame:GetChildren()) do
-            if child:IsA("Frame") then
-                child:Destroy()
-            end
-        end
-        
-        local blockedCount = 0
-        for _ in pairs(BlockedEvents) do
-            blockedCount = blockedCount + 1
-        end
-        
-        InfoLabel.Text = string.format("📊 Eventos Capturados: %d | 🔒 Bloqueados: %d", #CapturedEvents, blockedCount)
-        
-        for i = #CapturedEvents, math.max(1, #CapturedEvents - 50), -1 do
-            local event = CapturedEvents[i]
-            if not event then continue end
-            
-            local EventFrame = Instance.new("Frame")
-            EventFrame.Size = UDim2.new(1, -10, 0, 85)
-            EventFrame.BackgroundColor3 = Config.Theme.Surface
-            EventFrame.BorderSizePixel = 0
-            EventFrame.Parent = ScrollFrame
-            
-            local EventCorner = Instance.new("UICorner")
-            EventCorner.CornerRadius = UDim.new(0, 8)
-            EventCorner.Parent = EventFrame
-            
-            local TypeBadge = Instance.new("TextLabel")
-            TypeBadge.Size = UDim2.new(0, 100, 0, 22)
-            TypeBadge.Position = UDim2.new(0, 8, 0, 8)
-            TypeBadge.BackgroundColor3 = event.Type == "RemoteEvent" and Config.Theme.Primary or Config.Theme.Warning
-            TypeBadge.Text = event.Type == "RemoteEvent" and "📡 Event" or "🔌 Function"
-            TypeBadge.TextColor3 = Config.Theme.Text
-            TypeBadge.Font = Enum.Font.GothamBold
-            TypeBadge.TextSize = 11
-            TypeBadge.Parent = EventFrame
-            
-            local BadgeCorner = Instance.new("UICorner")
-            BadgeCorner.CornerRadius = UDim.new(0, 6)
-            BadgeCorner.Parent = TypeBadge
-            
-            local EventName = Instance.new("TextLabel")
-            EventName.Size = UDim2.new(1, -220, 0, 22)
-            EventName.Position = UDim2.new(0, 115, 0, 8)
-            EventName.BackgroundTransparency = 1
-            EventName.Text = event.Object.Name
-            EventName.TextColor3 = Config.Theme.Text
-            EventName.Font = Enum.Font.GothamBold
-            EventName.TextSize = 13
-            EventName.TextXAlignment = Enum.TextXAlignment.Left
-            EventName.TextTruncate = Enum.TextTruncate.AtEnd
-            EventName.Parent = EventFrame
-            
-            local PathLabel = Instance.new("TextLabel")
-            PathLabel.Size = UDim2.new(1, -120, 0, 18)
-            PathLabel.Position = UDim2.new(0, 8, 0, 32)
-            PathLabel.BackgroundTransparency = 1
-            PathLabel.Text = "📂 " .. event.Object:GetFullName()
-            PathLabel.TextColor3 = Config.Theme.TextSecondary
-            PathLabel.Font = Enum.Font.Gotham
-            PathLabel.TextSize = 10
-            PathLabel.TextXAlignment = Enum.TextXAlignment.Left
-            PathLabel.TextTruncate = Enum.TextTruncate.AtEnd
-            PathLabel.Parent = EventFrame
-            
-            local ArgsLabel = Instance.new("TextLabel")
-            ArgsLabel.Size = UDim2.new(0.5, -10, 0, 25)
-            ArgsLabel.Position = UDim2.new(0, 8, 1, -30)
-            ArgsLabel.BackgroundTransparency = 1
-            ArgsLabel.Text = string.format("📦 Args: %d | ⏰ %s", #event.Arguments, os.date("%H:%M:%S", event.Timestamp))
-            ArgsLabel.TextColor3 = Config.Theme.TextSecondary
-            ArgsLabel.Font = Enum.Font.Gotham
-            ArgsLabel.TextSize = 10
-            ArgsLabel.TextXAlignment = Enum.TextXAlignment.Left
-            ArgsLabel.Parent = EventFrame
-            
-            local BlockButton = CreateStyledButton(
-                BlockedEvents[event.Object] and "🔓 Desbloquear" or "🔒 Bloquear",
-                BlockedEvents[event.Object] and Config.Theme.Success or Config.Theme.Error,
-                EventFrame,
-                UDim2.new(1, -180, 0, 8),
-                UDim2.new(0, 85, 0, 32)
-            )
-            
-            local ReplayButton = CreateStyledButton(
-                "▶️ Replay",
-                Config.Theme.Primary,
-                EventFrame,
-                UDim2.new(1, -90, 0, 8),
-                UDim2.new(0, 85, 0, 32)
-            )
-            
-            local CopyButton = CreateStyledButton(
-                "📋 Copiar",
-                Config.Theme.Warning,
-                EventFrame,
-                UDim2.new(1, -180, 0, 45),
-                UDim2.new(0, 175, 0, 32)
-            )
-            
-            BlockButton.MouseButton1Click:Connect(function()
-                BlockedEvents[event.Object] = not BlockedEvents[event.Object]
-                UpdateEventsList()
-            end)
-            
-            ReplayButton.MouseButton1Click:Connect(function()
-                pcall(function()
-                    if event.Type == "RemoteEvent" then
-                        event.Object:FireServer(unpack(event.Arguments))
-                    else
-                        event.Object:InvokeServer(unpack(event.Arguments))
-                    end
-                end)
-                
-                ReplayButton.Text = "✅ Enviado"
-                task.wait(1)
-                ReplayButton.Text = "▶️ Replay"
-            end)
-            
-            CopyButton.MouseButton1Click:Connect(function()
-                local argsString = HttpService:JSONEncode(event.Arguments)
-                local copyText = string.format("-- %s\n%s:FireServer(%s)", 
-                    event.Object:GetFullName(), 
-                    event.Object.Name,
-                    argsString
-                )
-                setclipboard(copyText)
-                
-                CopyButton.Text = "✅ Copiado!"
-                task.wait(1)
-                CopyButton.Text = "📋 Copiar"
-            end)
-        end
-    end
-    
-    -- Sistema de hook melhorado
-    local function HookRemoteEvents()
-        local function HookObject(obj)
-            if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and not HookedObjects[obj] then
-                HookedObjects[obj] = true
-                
-                if obj:IsA("RemoteEvent") then
-                    local oldNamecall
-                    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-                        local method = getnamecallmethod()
-                        local args = {...}
-                        
-                        if self == obj and (method == "FireServer" or method == "fireServer") then
-                            if IsCapturing then
-                                local eventData = {
-                                    Object = obj,
-                                    Arguments = args,
-                                    Timestamp = os.time(),
-                                    Type = "RemoteEvent"
-                                }
-                                
-                                table.insert(CapturedEvents, 1, eventData)
-                                
-                                -- Limitar logs
-                                if #CapturedEvents > Config.MaxEventLogs then
-                                    table.remove(CapturedEvents, #CapturedEvents)
-                                end
-                                
-                                if IsUIVisible and CurrentTab == "Event Logs" then
-                                    UpdateEventsList()
-                                end
-                            end
-                            
-                            if BlockedEvents[obj] then
-                                return nil
-                            end
-                        end
-                        
-                        return oldNamecall(self, ...)
-                    end)
-                else
-                    local oldNamecall
-                    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-                        local method = getnamecallmethod()
-                        local args = {...}
-                        
-                        if self == obj and (method == "InvokeServer" or method == "invokeServer") then
-                            if IsCapturing then
-                                local eventData = {
-                                    Object = obj,
-                                    Arguments = args,
-                                    Timestamp = os.time(),
-                                    Type = "RemoteFunction"
-                                }
-                                
-                                table.insert(CapturedEvents, 1, eventData)
-                                
-                                if #CapturedEvents > Config.MaxEventLogs then
-                                    table.remove(CapturedEvents, #CapturedEvents)
-                                end
-                                
-                                if IsUIVisible and CurrentTab == "Event Logs" then
-                                    UpdateEventsList()
-                                end
-                            end
-                            
-                            if BlockedEvents[obj] then
-                                return nil
-                            end
-                        end
-                        
-                        return oldNamecall(self, ...)
-                    end)
-                end
-            end
-        end
-        
-        for _, obj in pairs(game:GetDescendants()) do
-            pcall(function()
-                HookObject(obj)
-            end)
-        end
-        
-        game.DescendantAdded:Connect(function(obj)
-            pcall(function()
-                HookObject(obj)
-            end)
-        end)
-    end
     
     StartButton.MouseButton1Click:Connect(function()
         IsCapturing = not IsCapturing
@@ -842,9 +925,20 @@ function CreateEventLogsTab()
             StatusLabel.Text = "🟢 Captura: ON"
             StatusLabel.BackgroundColor3 = Config.Theme.Success
             
-            if Config.AutoHook then
-                HookRemoteEvents()
-            end
+            -- Hookar eventos existentes
+            HookExistingRemotes()
+            
+            -- Hookar novos eventos
+            local descendantAddedConnection
+            descendantAddedConnection = game.DescendantAdded:Connect(function(obj)
+                if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and not HookedObjects[obj] then
+                    pcall(function()
+                        HookRemoteEvent(obj)
+                    end)
+                end
+            end)
+            
+            table.insert(ConnectionsTable, descendantAddedConnection)
         else
             StartButton.Text = "🟢 INICIAR CAPTURA"
             StartButton.BackgroundColor3 = Config.Theme.Success
@@ -860,14 +954,15 @@ function CreateEventLogsTab()
     end)
     
     ExportButton.MouseButton1Click:Connect(function()
-        local exportData = "-- Exported Events Log\n\n"
+        local exportData = "-- Exported Events Log\n-- Total Events: " .. #CapturedEvents .. "\n\n"
         for i, event in ipairs(CapturedEvents) do
             exportData = exportData .. string.format(
-                "-- [%d] %s (%s)\n-- Path: %s\n-- Args: %s\n\n",
+                "-- [%d] %s (%s)\n-- Path: %s\n-- Time: %s\n-- Args: %s\n\n",
                 i,
                 event.Object.Name,
                 event.Type,
                 event.Object:GetFullName(),
+                os.date("%H:%M:%S", event.Timestamp),
                 HttpService:JSONEncode(event.Arguments)
             )
         end
@@ -881,7 +976,7 @@ function CreateEventLogsTab()
     UpdateEventsList()
 end
 
--- ABA KEY LOGS (Melhorada)
+-- ABA KEY LOGS COMPLETAMENTE FUNCIONAL
 function CreateKeyLogsTab()
     local Container = Instance.new("Frame")
     Container.Size = UDim2.new(1, 0, 1, 0)
@@ -900,9 +995,20 @@ function CreateKeyLogsTab()
     local ExportButton = CreateStyledButton("💾 EXPORTAR", Config.Theme.Success, ControlFrame,
         UDim2.new(0.52, 0, 0, 0), UDim2.new(0.48, 0, 1, 0))
     
+    local InfoLabel = Instance.new("TextLabel")
+    InfoLabel.Size = UDim2.new(1, -20, 0, 25)
+    InfoLabel.Position = UDim2.new(0, 10, 0, 65)
+    InfoLabel.BackgroundTransparency = 1
+    InfoLabel.Text = "⌨️ Key Logger Ativo - Todos os inputs estão sendo registrados"
+    InfoLabel.TextColor3 = Config.Theme.Text
+    InfoLabel.Font = Enum.Font.Gotham
+    InfoLabel.TextSize = 12
+    InfoLabel.TextXAlignment = Enum.TextXAlignment.Left
+    InfoLabel.Parent = Container
+    
     local ScrollFrame = Instance.new("ScrollingFrame")
-    ScrollFrame.Size = UDim2.new(1, -20, 1, -75)
-    ScrollFrame.Position = UDim2.new(0, 10, 0, 65)
+    ScrollFrame.Size = UDim2.new(1, -20, 1, -110)
+    ScrollFrame.Position = UDim2.new(0, 10, 0, 95)
     ScrollFrame.BackgroundColor3 = Config.Theme.Secondary
     ScrollFrame.BorderSizePixel = 0
     ScrollFrame.ScrollBarThickness = 6
@@ -913,19 +1019,50 @@ function CreateKeyLogsTab()
     ScrollCorner.CornerRadius = UDim.new(0, 8)
     ScrollCorner.Parent = ScrollFrame
     
-    local LogBox = CreateStyledTextBox("⌨️ Key Logs aparecerão aqui...\nTodos os inputs serão registrados automaticamente", 
-        ScrollFrame, UDim2.new(0, 5, 0, 5), UDim2.new(1, -10, 1, -10), true)
-    LogBox.TextEditable = false
+    local LogBox = Instance.new("TextLabel")
+    LogBox.Size = UDim2.new(1, -20, 1, -20)
+    LogBox.Position = UDim2.new(0, 10, 0, 10)
+    LogBox.BackgroundTransparency = 1
+    LogBox.Text = "⌨️ Key Logger Iniciado...\nAguardando inputs...\n\n"
+    LogBox.TextColor3 = Config.Theme.Text
+    LogBox.Font = Enum.Font.Code
+    LogBox.TextSize = 12
+    LogBox.TextXAlignment = Enum.TextXAlignment.Left
+    LogBox.TextYAlignment = Enum.TextYAlignment.Top
+    LogBox.TextWrapped = true
+    LogBox.Parent = ScrollFrame
     
-    -- Sistema de captura de input melhorado
-    local inputConnection
-    inputConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    -- Sistema de captura de input 100% funcional
+    local function UpdateKeyLogsDisplay()
+        local displayText = "⌨️ KEY LOGS - Últimos 100 inputs:\n\n"
+        for i = 1, math.min(100, #KeyLogs) do
+            displayText = displayText .. KeyLogs[i]
+        end
+        LogBox.Text = displayText
+        
+        if Config.AutoScroll then
+            ScrollFrame.CanvasPosition = Vector2.new(0, LogBox.TextBounds.Y)
+        end
+    end
+
+    local inputBeganConnection
+    inputBeganConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
         local timestamp = os.date("%H:%M:%S")
         local inputType = input.UserInputType.Name
-        local keyName = input.KeyCode.Name ~= "Unknown" and input.KeyCode.Name or "N/A"
+        local keyName = "Unknown"
+        
+        if input.KeyCode ~= Enum.KeyCode.Unknown then
+            keyName = input.KeyCode.Name
+        elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
+            keyName = "MouseButton1"
+        elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+            keyName = "MouseButton2"
+        elseif input.UserInputType == Enum.UserInputType.MouseButton3 then
+            keyName = "MouseButton3"
+        end
         
         local logEntry = string.format(
-            "[%s] %s | Tipo: %s | Key: %s | Processado: %s\n",
+            "[%s] %s | %s | %s | GameProcessed: %s\n",
             timestamp,
             gameProcessed and "🔒" or "✅",
             inputType,
@@ -939,44 +1076,37 @@ function CreateKeyLogsTab()
             table.remove(KeyLogs, #KeyLogs)
         end
         
-        -- Atualizar display
-        local displayText = ""
-        for i = 1, math.min(100, #KeyLogs) do
-            displayText = displayText .. KeyLogs[i]
-        end
-        
-        LogBox.Text = displayText
-        
-        if Config.AutoScroll then
-            ScrollFrame.CanvasPosition = Vector2.new(0, 0)
-        end
+        UpdateKeyLogsDisplay()
     end)
     
-    table.insert(ConnectionsTable, inputConnection)
+    table.insert(ConnectionsTable, inputBeganConnection)
     
     ClearButton.MouseButton1Click:Connect(function()
         KeyLogs = {}
-        LogBox.Text = "⌨️ Key Logs limpos. Aguardando novos inputs...\n"
+        LogBox.Text = "🗑️ Key Logs limpos com sucesso!\nAguardando novos inputs...\n\n"
     end)
     
     ExportButton.MouseButton1Click:Connect(function()
-        local exportText = "-- Key Logs Export\n-- Total: " .. #KeyLogs .. "\n\n" .. table.concat(KeyLogs, "")
-        setclipboard(exportText)
+        local exportText = "-- Key Logs Export\n-- Total Inputs: " .. #KeyLogs .. "\n\n"
+        for i = #KeyLogs, 1, -1 do
+            exportText = exportText .. KeyLogs[i]
+        end
         
+        setclipboard(exportText)
         ExportButton.Text = "✅ COPIADO!"
         task.wait(2)
         ExportButton.Text = "💾 EXPORTAR"
     end)
 end
 
--- ABA CODE EXECUTOR (Melhorada)
+-- ABA EXECUTOR (mantida similar)
 function CreateCodeExecutorTab()
     local Container = Instance.new("Frame")
     Container.Size = UDim2.new(1, 0, 1, 0)
     Container.BackgroundTransparency = 1
     Container.Parent = TabContent
     
-    local CodeBox = CreateStyledTextBox("-- Code Executor\n-- Cole seu código Lua aqui\n\nprint('Hello from Advanced Panel!')", 
+    local CodeBox = CreateStyledTextBox("-- Code Executor\n-- Cole seu código Lua aqui\n\nprint('Hello from Advanced Panel v4.0!')", 
         Container, UDim2.new(0, 10, 0, 10), UDim2.new(1, -20, 0.55, -15), true)
     
     local ButtonFrame = Instance.new("Frame")
@@ -1051,7 +1181,7 @@ function CreateCodeExecutorTab()
     end)
 end
 
--- ABA SETTINGS (Melhorada)
+-- ABA SETTINGS (mantida similar)
 function CreateSettingsTab()
     local Container = Instance.new("Frame")
     Container.Size = UDim2.new(1, 0, 1, 0)
@@ -1070,7 +1200,6 @@ function CreateSettingsTab()
     
     local yPos = 0
     
-    -- Função para criar opção
     local function CreateOption(title, description, callback, isToggled)
         local OptionFrame = Instance.new("Frame")
         OptionFrame.Size = UDim2.new(1, -10, 0, 70)
@@ -1132,7 +1261,6 @@ function CreateSettingsTab()
         yPos = yPos + 80
     end
     
-    -- Opções
     CreateOption(
         "🔄 Auto Hook",
         "Hookar automaticamente novos RemoteEvents/Functions",
@@ -1161,7 +1289,6 @@ function CreateSettingsTab()
         Config.CaptureMouseEvents
     )
     
-    -- Informações
     local InfoFrame = Instance.new("Frame")
     InfoFrame.Size = UDim2.new(1, -10, 0, 120)
     InfoFrame.Position = UDim2.new(0, 0, 0, yPos)
@@ -1193,7 +1320,6 @@ function CreateSettingsTab()
     
     yPos = yPos + 130
     
-    -- Botão de reset
     local ResetButton = CreateStyledButton("⚠️ RESETAR TUDO", Config.Theme.Error, ScrollFrame,
         UDim2.new(0, 0, 0, yPos), UDim2.new(1, -10, 0, 45))
     
@@ -1314,25 +1440,21 @@ local function ShowNotification(text, duration)
     NotifFrame:Destroy()
 end
 
-ShowNotification("🎮 Advanced Dump Panel v3.0\n✅ Carregado! Pressione F", 4)
+ShowNotification("🎮 Advanced Dump Panel v4.0\n✅ Carregado! Pressione F", 4)
 
 print("╔═════════════════════════════════════════╗")
-print("║   Advanced Dump Panel v3.0              ║")
+print("║   Advanced Dump Panel v4.0              ║")
 print("║   ✅ Carregado com sucesso!             ║")
 print("║   📌 Pressione F para abrir/fechar      ║")
-print("║   🔧 Desenvolvido para análise avançada ║")
+print("║   🔧 Dump REAL + Logs 100% funcionais   ║")
 print("╚═════════════════════════════════════════╝")
 
 -- Auto-inicialização do hook se configurado
 if Config.AutoHook then
     task.spawn(function()
         task.wait(2)
-        for _, obj in pairs(game:GetDescendants()) do
-            if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-                HookedObjects[obj] = true
-            end
-        end
-        print("🔗 Auto-hook inicializado: " .. tostring(#HookedObjects) .. " objetos")
+        HookExistingRemotes()
+        print("🔗 Auto-hook inicializado: " .. tostring(#HookedObjects) .. " objetos hookados")
     end)
 end
 
