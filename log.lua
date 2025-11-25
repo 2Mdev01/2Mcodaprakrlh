@@ -1,8 +1,7 @@
 --[[
     ╔═══════════════════════════════════════════════════════════╗
-    ║  Advanced Dump & Monitoring Panel v4.0                   ║
-    ║  Funcionalidades: Dump REAL dos arquivos, Event Spy      ║
-    ║  Key Logger, Code Executor e Monitoramento em tempo real ║
+    ║  Purple Dump Panel v5.0 - Xeno Edition                   ║
+    ║  Dump REAL + Trigger 100% Funcional + Tema Roxo         ║
     ║  Hotkey: F para abrir/fechar                             ║
     ╚═══════════════════════════════════════════════════════════╝
 --]]
@@ -16,25 +15,26 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local TeleportService = game:GetService("TeleportService")
 
--- Configurações
+-- Configurações com tema ROXO/PRETO
 local Config = {
     AutoHook = true,
-    MaxEventLogs = 1000,
-    MaxKeyLogs = 2000,
+    MaxEventLogs = 2000,
+    MaxKeyLogs = 3000,
     AutoScroll = true,
     ShowTimestamps = true,
     CaptureMouseEvents = true,
     Theme = {
-        Primary = Color3.fromRGB(88, 101, 242),
-        Secondary = Color3.fromRGB(32, 34, 37),
-        Background = Color3.fromRGB(47, 49, 54),
-        Surface = Color3.fromRGB(54, 57, 63),
-        Success = Color3.fromRGB(67, 181, 129),
-        Warning = Color3.fromRGB(250, 166, 26),
-        Error = Color3.fromRGB(237, 66, 69),
-        Text = Color3.fromRGB(255, 255, 255),
-        TextSecondary = Color3.fromRGB(185, 187, 190)
+        Primary = Color3.fromRGB(147, 51, 234),    -- Roxo principal
+        Secondary = Color3.fromRGB(20, 20, 20),    -- Preto
+        Background = Color3.fromRGB(30, 30, 40),   -- Fundo escuro
+        Surface = Color3.fromRGB(40, 35, 55),      -- Superfície roxa escura
+        Success = Color3.fromRGB(72, 199, 142),    -- Verde
+        Warning = Color3.fromRGB(255, 159, 28),    -- Laranja
+        Error = Color3.fromRGB(255, 85, 85),       -- Vermelho
+        Text = Color3.fromRGB(255, 255, 255),      -- Branco
+        TextSecondary = Color3.fromRGB(200, 200, 210) -- Cinza claro
     }
 }
 
@@ -51,7 +51,7 @@ local OriginalFunctions = {}
 
 -- Criar UI
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AdvancedDumpPanelV4_" .. tostring(math.random(10000,99999))
+ScreenGui.Name = "PurpleDumpPanel_" .. tostring(math.random(10000,99999))
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
@@ -63,21 +63,21 @@ if not success then
     ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- Frame Principal com sombra
+-- Frame Principal com sombra roxa
 local Shadow = Instance.new("Frame")
 Shadow.Name = "Shadow"
-Shadow.Size = UDim2.new(0, 810, 0, 610)
-Shadow.Position = UDim2.new(0.5, -405, 0.5, -305)
+Shadow.Size = UDim2.new(0, 850, 0, 650)
+Shadow.Position = UDim2.new(0.5, -425, 0.5, -325)
 Shadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-Shadow.BackgroundTransparency = 0.7
+Shadow.BackgroundTransparency = 0.8
 Shadow.BorderSizePixel = 0
 Shadow.Visible = false
 Shadow.Parent = ScreenGui
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 800, 0, 600)
-MainFrame.Position = UDim2.new(0.5, -400, 0.5, -300)
+MainFrame.Size = UDim2.new(0, 840, 0, 640)
+MainFrame.Position = UDim2.new(0.5, -420, 0.5, -320)
 MainFrame.BackgroundColor3 = Config.Theme.Background
 MainFrame.BorderSizePixel = 0
 MainFrame.Visible = false
@@ -86,114 +86,77 @@ MainFrame.Parent = ScreenGui
 
 -- Corner para bordas arredondadas
 local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 12)
+MainCorner.CornerRadius = UDim.new(0, 15)
 MainCorner.Parent = MainFrame
 
--- Barra de título moderna
+-- Barra de título moderna ROXA
 local TitleBar = Instance.new("Frame")
 TitleBar.Name = "TitleBar"
-TitleBar.Size = UDim2.new(1, 0, 0, 40)
+TitleBar.Size = UDim2.new(1, 0, 0, 45)
 TitleBar.BackgroundColor3 = Config.Theme.Primary
 TitleBar.BorderSizePixel = 0
 TitleBar.Parent = MainFrame
 
 local TitleCorner = Instance.new("UICorner")
-TitleCorner.CornerRadius = UDim.new(0, 12)
+TitleCorner.CornerRadius = UDim.new(0, 15)
 TitleCorner.Parent = TitleBar
 
--- Corrigir cantos inferiores da barra de título
-local TitleBottomCover = Instance.new("Frame")
-TitleBottomCover.Size = UDim2.new(1, 0, 0, 12)
-TitleBottomCover.Position = UDim2.new(0, 0, 1, -12)
-TitleBottomCover.BackgroundColor3 = Config.Theme.Primary
-TitleBottomCover.BorderSizePixel = 0
-TitleBottomCover.Parent = TitleBar
+-- Gradiente na barra de título
+local TitleGradient = Instance.new("UIGradient")
+TitleGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Config.Theme.Primary),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(126, 34, 206))
+})
+TitleGradient.Rotation = 45
+TitleGradient.Parent = TitleBar
 
 -- Ícone e título
 local TitleIcon = Instance.new("TextLabel")
-TitleIcon.Size = UDim2.new(0, 30, 0, 30)
-TitleIcon.Position = UDim2.new(0, 10, 0, 5)
+TitleIcon.Size = UDim2.new(0, 35, 0, 35)
+TitleIcon.Position = UDim2.new(0, 15, 0, 5)
 TitleIcon.BackgroundTransparency = 1
-TitleIcon.Text = "🔍"
+TitleIcon.Text = "💜"
 TitleIcon.TextColor3 = Config.Theme.Text
 TitleIcon.Font = Enum.Font.GothamBold
-TitleIcon.TextSize = 18
+TitleIcon.TextSize = 20
 TitleIcon.Parent = TitleBar
 
 local TitleLabel = Instance.new("TextLabel")
-TitleLabel.Size = UDim2.new(0, 400, 0, 30)
-TitleLabel.Position = UDim2.new(0, 45, 0, 5)
+TitleLabel.Size = UDim2.new(0, 400, 0, 35)
+TitleLabel.Position = UDim2.new(0, 55, 0, 5)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "Advanced Dump Panel v4.0"
+TitleLabel.Text = "Purple Dump Panel v5.0"
 TitleLabel.TextColor3 = Config.Theme.Text
 TitleLabel.Font = Enum.Font.GothamBold
-TitleLabel.TextSize = 16
+TitleLabel.TextSize = 18
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Parent = TitleBar
 
 -- Status de captura
 local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Size = UDim2.new(0, 150, 0, 20)
+StatusLabel.Size = UDim2.new(0, 160, 0, 25)
 StatusLabel.Position = UDim2.new(1, -320, 0, 10)
 StatusLabel.BackgroundColor3 = Config.Theme.Surface
 StatusLabel.Text = "⚫ Captura: OFF"
 StatusLabel.TextColor3 = Config.Theme.TextSecondary
-StatusLabel.Font = Enum.Font.Gotham
+StatusLabel.Font = Enum.Font.GothamBold
 StatusLabel.TextSize = 12
 StatusLabel.Parent = TitleBar
 
 local StatusCorner = Instance.new("UICorner")
-StatusCorner.CornerRadius = UDim.new(0, 10)
+StatusCorner.CornerRadius = UDim.new(0, 12)
 StatusCorner.Parent = StatusLabel
 
 -- Botões de controle
-local MinimizeButton = Instance.new("TextButton")
-MinimizeButton.Size = UDim2.new(0, 35, 0, 35)
-MinimizeButton.Position = UDim2.new(1, -110, 0, 2.5)
-MinimizeButton.BackgroundColor3 = Config.Theme.Warning
-MinimizeButton.Text = "─"
-MinimizeButton.TextColor3 = Config.Theme.Text
-MinimizeButton.Font = Enum.Font.GothamBold
-MinimizeButton.TextSize = 18
-MinimizeButton.Parent = TitleBar
-
-local MinimizeCorner = Instance.new("UICorner")
-MinimizeCorner.CornerRadius = UDim.new(0, 8)
-MinimizeCorner.Parent = MinimizeButton
-
-local MaximizeButton = Instance.new("TextButton")
-MaximizeButton.Size = UDim2.new(0, 35, 0, 35)
-MaximizeButton.Position = UDim2.new(1, -70, 0, 2.5)
-MaximizeButton.BackgroundColor3 = Config.Theme.Success
-MaximizeButton.Text = "□"
-MaximizeButton.TextColor3 = Config.Theme.Text
-MaximizeButton.Font = Enum.Font.GothamBold
-MaximizeButton.TextSize = 14
-MaximizeButton.Parent = TitleBar
-
-local MaximizeCorner = Instance.new("UICorner")
-MaximizeCorner.CornerRadius = UDim.new(0, 8)
-MaximizeCorner.Parent = MaximizeButton
-
-local CloseButton = Instance.new("TextButton")
-CloseButton.Size = UDim2.new(0, 35, 0, 35)
-CloseButton.Position = UDim2.new(1, -30, 0, 2.5)
-CloseButton.BackgroundColor3 = Config.Theme.Error
-CloseButton.Text = "✕"
-CloseButton.TextColor3 = Config.Theme.Text
-CloseButton.Font = Enum.Font.GothamBold
-CloseButton.TextSize = 16
-CloseButton.Parent = TitleBar
-
-local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 8)
-CloseCorner.Parent = CloseButton
+local MinimizeButton = CreateStyledButton("─", Config.Theme.Warning, TitleBar, UDim2.new(1, -120, 0, 5), UDim2.new(0, 35, 0, 35))
+local MaximizeButton = CreateStyledButton("□", Config.Theme.Success, TitleBar, UDim2.new(1, -80, 0, 5), UDim2.new(0, 35, 0, 35))
+local CloseButton = CreateStyledButton("✕", Config.Theme.Error, TitleBar, UDim2.new(1, -40, 0, 5), UDim2.new(0, 35, 0, 35))
 
 -- Abas modernas
 local TabButtons = Instance.new("Frame")
 TabButtons.Name = "TabButtons"
-TabButtons.Size = UDim2.new(1, -20, 0, 45)
-TabButtons.Position = UDim2.new(0, 10, 0, 50)
+TabButtons.Size = UDim2.new(1, -20, 0, 50)
+TabButtons.Position = UDim2.new(0, 10, 0, 55)
 TabButtons.BackgroundTransparency = 1
 TabButtons.Parent = MainFrame
 
@@ -201,61 +164,60 @@ local TabLayout = Instance.new("UIListLayout")
 TabLayout.FillDirection = Enum.FillDirection.Horizontal
 TabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 TabLayout.SortOrder = Enum.SortOrder.LayoutOrder
-TabLayout.Padding = UDim.new(0, 8)
+TabLayout.Padding = UDim.new(0, 10)
 TabLayout.Parent = TabButtons
 
 -- Conteúdo das abas
 local TabContent = Instance.new("Frame")
 TabContent.Name = "TabContent"
-TabContent.Size = UDim2.new(1, -20, 1, -115)
-TabContent.Position = UDim2.new(0, 10, 0, 105)
+TabContent.Size = UDim2.new(1, -20, 1, -125)
+TabContent.Position = UDim2.new(0, 10, 0, 115)
 TabContent.BackgroundColor3 = Config.Theme.Surface
 TabContent.BorderSizePixel = 0
 TabContent.Parent = MainFrame
 
 local ContentCorner = Instance.new("UICorner")
-ContentCorner.CornerRadius = UDim.new(0, 10)
+ContentCorner.CornerRadius = UDim.new(0, 12)
 ContentCorner.Parent = TabContent
 
 -- Variável de controle da aba atual
 local CurrentTab = "Dump"
-local CurrentTabButton = nil
 
 -- Função para criar botão de aba
 local function CreateTabButton(name, icon, index)
     local Button = Instance.new("TextButton")
     Button.Name = name
-    Button.Size = UDim2.new(0, 145, 1, 0)
+    Button.Size = UDim2.new(0, 150, 1, 0)
     Button.BackgroundColor3 = Config.Theme.Surface
     Button.Text = ""
     Button.Font = Enum.Font.GothamBold
-    Button.TextSize = 13
+    Button.TextSize = 14
     Button.TextColor3 = Config.Theme.TextSecondary
     Button.AutoButtonColor = false
     Button.LayoutOrder = index
     Button.Parent = TabButtons
     
     local ButtonCorner = Instance.new("UICorner")
-    ButtonCorner.CornerRadius = UDim.new(0, 8)
+    ButtonCorner.CornerRadius = UDim.new(0, 10)
     ButtonCorner.Parent = Button
     
     local IconLabel = Instance.new("TextLabel")
-    IconLabel.Size = UDim2.new(0, 25, 0, 25)
-    IconLabel.Position = UDim2.new(0, 10, 0.5, -12.5)
+    IconLabel.Size = UDim2.new(0, 30, 0, 30)
+    IconLabel.Position = UDim2.new(0, 12, 0.5, -15)
     IconLabel.BackgroundTransparency = 1
     IconLabel.Text = icon
     IconLabel.Font = Enum.Font.GothamBold
-    IconLabel.TextSize = 16
+    IconLabel.TextSize = 18
     IconLabel.TextColor3 = Config.Theme.TextSecondary
     IconLabel.Parent = Button
     
     local TextLabel = Instance.new("TextLabel")
-    TextLabel.Size = UDim2.new(1, -45, 1, 0)
-    TextLabel.Position = UDim2.new(0, 40, 0, 0)
+    TextLabel.Size = UDim2.new(1, -50, 1, 0)
+    TextLabel.Position = UDim2.new(0, 45, 0, 0)
     TextLabel.BackgroundTransparency = 1
     TextLabel.Text = name
     TextLabel.Font = Enum.Font.GothamBold
-    TextLabel.TextSize = 13
+    TextLabel.TextSize = 14
     TextLabel.TextColor3 = Config.Theme.TextSecondary
     TextLabel.TextXAlignment = Enum.TextXAlignment.Left
     TextLabel.Parent = Button
@@ -302,7 +264,7 @@ function SwitchTab(tabName, button, icon, text)
         end
     end
     
-    -- Limpar conteúdo anterior com fade
+    -- Limpar conteúdo anterior
     for _, child in pairs(TabContent:GetChildren()) do
         if not child:IsA("UICorner") then
             child:Destroy()
@@ -324,15 +286,15 @@ function SwitchTab(tabName, button, icon, text)
 end
 
 -- Função auxiliar para criar botões estilizados
-local function CreateStyledButton(text, color, parent, position, size)
+function CreateStyledButton(text, color, parent, position, size)
     local Button = Instance.new("TextButton")
-    Button.Size = size or UDim2.new(0.45, 0, 0, 38)
+    Button.Size = size or UDim2.new(0.45, 0, 0, 40)
     Button.Position = position or UDim2.new(0, 0, 0, 0)
     Button.BackgroundColor3 = color
     Button.Text = text
     Button.TextColor3 = Config.Theme.Text
     Button.Font = Enum.Font.GothamBold
-    Button.TextSize = 13
+    Button.TextSize = 14
     Button.AutoButtonColor = false
     Button.Parent = parent
     
@@ -359,7 +321,7 @@ local function CreateStyledButton(text, color, parent, position, size)
 end
 
 -- Função auxiliar para criar caixas de texto estilizadas
-local function CreateStyledTextBox(placeholder, parent, position, size, multiline)
+function CreateStyledTextBox(placeholder, parent, position, size, multiline)
     local Box = Instance.new("TextBox")
     Box.Size = size or UDim2.new(0.95, 0, 0, 400)
     Box.Position = position or UDim2.new(0.025, 0, 0, 60)
@@ -391,31 +353,50 @@ local function CreateStyledTextBox(placeholder, parent, position, size, multilin
     return Box
 end
 
--- SISTEMA DE DUMP REAL DOS ARQUIVOS
+-- SISTEMA DE DUMP REAL SALVANDO ARQUIVOS
+local function SaveToFile(filename, content)
+    if writefile then
+        local success, err = pcall(function()
+            writefile(filename, content)
+        end)
+        return success, err
+    else
+        return false, "writefile não disponível"
+    end
+end
+
 local function GetScriptSource(script)
     local success, source = pcall(function()
         return script.Source
     end)
     
-    if success then
+    if success and source and source ~= "" then
         return source
     else
         return "-- [PROTECTED] Unable to read source"
     end
 end
 
-local function DumpScriptsRecursive(parent, path, output)
+local function DumpScriptsRecursive(parent, path, output, fileContent)
     for _, obj in pairs(parent:GetChildren()) do
         local currentPath = path .. "/" .. obj.Name
         
         if obj:IsA("Script") or obj:IsA("LocalScript") or obj:IsA("ModuleScript") then
-            output.Text = output.Text .. "\n" .. string.rep("-", 80) .. "\n"
+            local source = GetScriptSource(obj)
+            
+            -- Adicionar ao output da UI
+            output.Text = output.Text .. "\n" .. string.rep("=", 80) .. "\n"
             output.Text = output.Text .. "-- PATH: " .. currentPath .. "\n"
             output.Text = output.Text .. "-- CLASS: " .. obj.ClassName .. "\n"
-            output.Text = output.Text .. string.rep("-", 80) .. "\n"
+            output.Text = output.Text .. string.rep("=", 80) .. "\n"
+            output.Text = output.Text .. source .. "\n\n"
             
-            local source = GetScriptSource(obj)
-            output.Text = output.Text .. source .. "\n"
+            -- Adicionar ao conteúdo do arquivo
+            fileContent = fileContent .. "\n" .. string.rep("=", 80) .. "\n"
+            fileContent = fileContent .. "-- PATH: " .. currentPath .. "\n"
+            fileContent = fileContent .. "-- CLASS: " .. obj.ClassName .. "\n"
+            fileContent = fileContent .. string.rep("=", 80) .. "\n"
+            fileContent = fileContent .. source .. "\n\n"
             
             -- Cache do script
             ScriptCache[currentPath] = {
@@ -426,11 +407,13 @@ local function DumpScriptsRecursive(parent, path, output)
             }
         end
         
-        -- Recursão limitada para performance
-        if #obj:GetChildren() > 0 and #path < 100 then
-            DumpScriptsRecursive(obj, currentPath, output)
+        -- Recursão
+        if #obj:GetChildren() > 0 then
+            fileContent = DumpScriptsRecursive(obj, currentPath, output, fileContent)
         end
     end
+    
+    return fileContent
 end
 
 -- ABA DUMP MELHORADA
@@ -441,20 +424,20 @@ function CreateDumpTab()
     Container.Parent = TabContent
     
     local ButtonFrame = Instance.new("Frame")
-    ButtonFrame.Size = UDim2.new(1, -20, 0, 45)
+    ButtonFrame.Size = UDim2.new(1, -20, 0, 50)
     ButtonFrame.Position = UDim2.new(0, 10, 0, 10)
     ButtonFrame.BackgroundTransparency = 1
     ButtonFrame.Parent = Container
     
-    local DumpButton = CreateStyledButton("🚀 DUMP REAL DOS ARQUIVOS", Config.Theme.Primary, ButtonFrame, 
+    local DumpButton = CreateStyledButton("💜 DUMP REAL + SALVAR", Config.Theme.Primary, ButtonFrame, 
         UDim2.new(0, 0, 0, 0), UDim2.new(0.48, 0, 1, 0))
     
-    local ExportButton = CreateStyledButton("💾 EXPORTAR DUMP", Config.Theme.Success, ButtonFrame, 
+    local ExportButton = CreateStyledButton("💾 EXPORTAR", Config.Theme.Success, ButtonFrame, 
         UDim2.new(0.52, 0, 0, 0), UDim2.new(0.48, 0, 1, 0))
     
     local ProgressFrame = Instance.new("Frame")
-    ProgressFrame.Size = UDim2.new(1, -20, 0, 20)
-    ProgressFrame.Position = UDim2.new(0, 10, 0, 65)
+    ProgressFrame.Size = UDim2.new(1, -20, 0, 25)
+    ProgressFrame.Position = UDim2.new(0, 10, 0, 70)
     ProgressFrame.BackgroundColor3 = Config.Theme.Secondary
     ProgressFrame.BorderSizePixel = 0
     ProgressFrame.Visible = false
@@ -466,7 +449,7 @@ function CreateDumpTab()
     
     local ProgressBar = Instance.new("Frame")
     ProgressBar.Size = UDim2.new(0, 0, 1, 0)
-    ProgressBar.BackgroundColor3 = Config.Theme.Success
+    ProgressBar.BackgroundColor3 = Config.Theme.Primary
     ProgressBar.BorderSizePixel = 0
     ProgressBar.Parent = ProgressFrame
     
@@ -485,10 +468,10 @@ function CreateDumpTab()
     
     local ScrollFrame = Instance.new("ScrollingFrame")
     ScrollFrame.Size = UDim2.new(1, -20, 1, -115)
-    ScrollFrame.Position = UDim2.new(0, 10, 0, 95)
+    ScrollFrame.Position = UDim2.new(0, 10, 0, 105)
     ScrollFrame.BackgroundColor3 = Config.Theme.Secondary
     ScrollFrame.BorderSizePixel = 0
-    ScrollFrame.ScrollBarThickness = 6
+    ScrollFrame.ScrollBarThickness = 8
     ScrollFrame.ScrollBarImageColor3 = Config.Theme.Primary
     ScrollFrame.Parent = Container
     
@@ -496,14 +479,14 @@ function CreateDumpTab()
     ScrollCorner.CornerRadius = UDim.new(0, 8)
     ScrollCorner.Parent = ScrollFrame
     
-    local OutputBox = CreateStyledTextBox("📁 DUMP REAL DOS ARQUIVOS DO SERVIDOR\n\n"..
-        "Este dump irá extrair o código fonte REAL de todos os scripts do jogo.\n"..
-        "Isso inclui:\n"..
-        "• Scripts do Servidor\n"..
-        "• LocalScripts\n"..
-        "• ModuleScripts\n"..
-        "• Todos os arquivos do ReplicatedStorage\n\n"..
-        "Clique em 'DUMP REAL DOS ARQUIVOS' para começar.", 
+    local OutputBox = CreateStyledTextBox("💜 PURPLE DUMP PANEL v5.0\n\n"..
+        "DUMP REAL + SALVAMENTO EM ARQUIVO\n\n"..
+        "Este dump irá:\n"..
+        "• Extrair código fonte REAL dos scripts\n"..
+        "• Salvar em arquivo no seu PC\n"..
+        "• Processar todos os serviços do jogo\n"..
+        "• Manter cache para análise rápida\n\n"..
+        "Clique em 'DUMP REAL + SALVAR' para começar.", 
         ScrollFrame, UDim2.new(0, 5, 0, 5), UDim2.new(1, -10, 1, -10), true)
     OutputBox.TextEditable = false
     
@@ -520,8 +503,7 @@ function CreateDumpTab()
         
         task.spawn(function()
             local startTime = tick()
-            OutputBox.Text = "🚀 INICIANDO DUMP REAL DOS ARQUIVOS...\n"..
-                            "⏰ Isso pode levar alguns minutos...\n\n"
+            OutputBox.Text = "🚀 INICIANDO DUMP REAL...\n⏰ Isso pode levar alguns minutos...\n\n"
             
             ScriptCache = {}
             local totalScripts = 0
@@ -547,7 +529,8 @@ function CreateDumpTab()
                 game:GetService("StarterPack"),
                 game:GetService("StarterPlayer"),
                 game:GetService("Lighting"),
-                game:GetService("SoundService")
+                game:GetService("SoundService"),
+                game:GetService("Players")
             }
             
             for _, service in pairs(servicesToDump) do
@@ -557,53 +540,58 @@ function CreateDumpTab()
             OutputBox.Text = OutputBox.Text .. string.format("📊 Total de scripts encontrados: %d\n\n", totalScripts)
             
             -- Fazer o dump real
+            local fileContent = "-- PURPLE DUMP PANEL v5.0 - DUMP COMPLETO\n-- Data: " .. os.date("%d/%m/%Y %H:%M:%S") .. "\n\n"
+            
             for _, service in pairs(servicesToDump) do
                 local serviceName = service.Name
-                OutputBox.Text = OutputBox.Text .. string.format("\n📂 DUMPING: %s\n", serviceName)
+                OutputBox.Text = OutputBox.Text .. string.format("\n📂 PROCESSANDO: %s\n", serviceName)
+                fileContent = fileContent .. string.format("\n=== %s ===\n", serviceName)
                 
-                DumpScriptsRecursive(service, serviceName, OutputBox)
+                fileContent = DumpScriptsRecursive(service, serviceName, OutputBox, fileContent)
                 
-                -- Simular progresso
-                for i = 1, 10 do
-                    processedScripts = processedScripts + math.floor(totalScripts / 10)
-                    if processedScripts > totalScripts then
-                        processedScripts = totalScripts
-                    end
-                    UpdateProgress(processedScripts, totalScripts, "Processando " .. serviceName)
-                    task.wait(0.1)
-                end
+                -- Atualizar progresso
+                processedScripts = processedScripts + math.floor(totalScripts / #servicesToDump)
+                UpdateProgress(processedScripts, totalScripts, "Processando " .. serviceName)
+                task.wait(0.1)
             end
+            
+            -- SALVAR EM ARQUIVO
+            local filename = "purple_dump_" .. os.time() .. ".lua"
+            local success, err = SaveToFile(filename, fileContent)
             
             local endTime = tick()
             local duration = string.format("%.2f", endTime - startTime)
             
-            OutputBox.Text = OutputBox.Text .. string.format("\n\n✅ DUMP CONCLUÍDO!\n", totalScripts)
+            if success then
+                OutputBox.Text = OutputBox.Text .. string.format("\n\n✅ DUMP SALVO COM SUCESSO!\n")
+                OutputBox.Text = OutputBox.Text .. string.format("📁 Arquivo: %s\n", filename)
+            else
+                OutputBox.Text = OutputBox.Text .. string.format("\n\n⚠️ DUMP CONCLUÍDO MAS NÃO SALVO\n")
+                OutputBox.Text = OutputBox.Text .. string.format("❌ Erro: %s\n", err)
+            end
+            
             OutputBox.Text = OutputBox.Text .. string.format("📊 Scripts processados: %d\n", totalScripts)
             OutputBox.Text = OutputBox.Text .. string.format("⏰ Tempo total: %s segundos\n", duration)
-            OutputBox.Text = OutputBox.Text .. string.format("💾 Tamanho aproximado: %d KB\n", #OutputBox.Text / 1024)
+            OutputBox.Text = OutputBox.Text .. string.format("💾 Tamanho: %d KB\n", #fileContent / 1024)
             
             ProgressFrame.Visible = false
-            DumpButton.Text = "🚀 DUMP REAL DOS ARQUIVOS"
+            DumpButton.Text = "💜 DUMP REAL + SALVAR"
             DumpButton.BackgroundColor3 = Config.Theme.Primary
         end)
     end)
     
     ExportButton.MouseButton1Click:Connect(function()
         local dumpData = OutputBox.Text
-        if #dumpData > 1000000 then
-            OutputBox.Text = OutputBox.Text .. "\n⚠️ Dump muito grande para clipboard. Use exportação por arquivo."
-        else
-            setclipboard(dumpData)
-            OutputBox.Text = OutputBox.Text .. "\n✅ Dump copiado para clipboard!"
-        end
+        setclipboard(dumpData)
+        OutputBox.Text = OutputBox.Text .. "\n✅ Dump copiado para clipboard!"
         
         ExportButton.Text = "✅ COPIADO!"
         task.wait(2)
-        ExportButton.Text = "💾 EXPORTAR DUMP"
+        ExportButton.Text = "💾 EXPORTAR"
     end)
 end
 
--- SISTEMA DE LOGS DE EVENTOS COMPLETAMENTE REFEITO
+-- SISTEMA DE TRIGGER 100% FUNCIONAL
 local function HookRemoteEvent(event)
     if HookedObjects[event] then return end
     HookedObjects[event] = true
@@ -614,6 +602,7 @@ local function HookRemoteEvent(event)
         
         event.FireServer = function(self, ...)
             local args = {...}
+            local callingScript = getcallingscript()
             
             if IsCapturing then
                 local eventData = {
@@ -621,7 +610,8 @@ local function HookRemoteEvent(event)
                     Arguments = args,
                     Timestamp = os.time(),
                     Type = "RemoteEvent",
-                    Caller = getcallingscript() or "Unknown"
+                    Caller = callingScript or "Unknown",
+                    Path = event:GetFullName()
                 }
                 
                 table.insert(CapturedEvents, 1, eventData)
@@ -646,6 +636,7 @@ local function HookRemoteEvent(event)
         
         event.InvokeServer = function(self, ...)
             local args = {...}
+            local callingScript = getcallingscript()
             
             if IsCapturing then
                 local eventData = {
@@ -653,7 +644,8 @@ local function HookRemoteEvent(event)
                     Arguments = args,
                     Timestamp = os.time(),
                     Type = "RemoteFunction",
-                    Caller = getcallingscript() or "Unknown"
+                    Caller = callingScript or "Unknown",
+                    Path = event:GetFullName()
                 }
                 
                 table.insert(CapturedEvents, 1, eventData)
@@ -675,12 +667,46 @@ local function HookRemoteEvent(event)
 end
 
 local function HookExistingRemotes()
-    for _, obj in pairs(game:GetDescendants()) do
-        if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and not HookedObjects[obj] then
-            pcall(function()
-                HookRemoteEvent(obj)
-            end)
+    local function HookDescendants(parent)
+        for _, obj in pairs(parent:GetDescendants()) do
+            if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and not HookedObjects[obj] then
+                pcall(function()
+                    HookRemoteEvent(obj)
+                end)
+            end
         end
+    end
+    
+    -- Hookar em todos os serviços importantes
+    local services = {
+        game:GetService("Workspace"),
+        game:GetService("ReplicatedStorage"),
+        game:GetService("ReplicatedFirst"),
+        game:GetService("ServerScriptService"),
+        game:GetService("ServerStorage"),
+        game:GetService("StarterGui"),
+        game:GetService("StarterPack"),
+        game:GetService("StarterPlayer"),
+        game:GetService("Players")
+    }
+    
+    for _, service in pairs(services) do
+        pcall(function()
+            HookDescendants(service)
+        end)
+    end
+    
+    -- Hookar novos objetos
+    for _, service in pairs(services) do
+        local connection
+        connection = service.DescendantAdded:Connect(function(obj)
+            if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and not HookedObjects[obj] then
+                pcall(function()
+                    HookRemoteEvent(obj)
+                end)
+            end
+        end)
+        table.insert(ConnectionsTable, connection)
     end
 end
 
@@ -703,15 +729,15 @@ function UpdateEventsList()
     end
     
     if EventsInfoLabel then
-        EventsInfoLabel.Text = string.format("📊 Eventos Capturados: %d | 🔒 Bloqueados: %d", #CapturedEvents, blockedCount)
+        EventsInfoLabel.Text = string.format("📊 Eventos: %d | 🔒 Bloqueados: %d | 💜 Hooked: %d", #CapturedEvents, blockedCount, #HookedObjects)
     end
     
-    for i = math.min(50, #CapturedEvents), 1, -1 do
+    for i = math.min(100, #CapturedEvents), 1, -1 do
         local event = CapturedEvents[i]
         if not event then continue end
         
         local EventFrame = Instance.new("Frame")
-        EventFrame.Size = UDim2.new(1, -10, 0, 100)
+        EventFrame.Size = UDim2.new(1, -10, 0, 110)
         EventFrame.BackgroundColor3 = Config.Theme.Surface
         EventFrame.BorderSizePixel = 0
         EventFrame.Parent = EventsScrollFrame
@@ -721,13 +747,13 @@ function UpdateEventsList()
         EventCorner.Parent = EventFrame
         
         local TypeBadge = Instance.new("TextLabel")
-        TypeBadge.Size = UDim2.new(0, 100, 0, 22)
+        TypeBadge.Size = UDim2.new(0, 120, 0, 25)
         TypeBadge.Position = UDim2.new(0, 8, 0, 8)
         TypeBadge.BackgroundColor3 = event.Type == "RemoteEvent" and Config.Theme.Primary or Config.Theme.Warning
         TypeBadge.Text = event.Type == "RemoteEvent" and "📡 RemoteEvent" or "🔌 RemoteFunction"
         TypeBadge.TextColor3 = Config.Theme.Text
         TypeBadge.Font = Enum.Font.GothamBold
-        TypeBadge.TextSize = 11
+        TypeBadge.TextSize = 12
         TypeBadge.Parent = EventFrame
         
         local BadgeCorner = Instance.new("UICorner")
@@ -735,48 +761,48 @@ function UpdateEventsList()
         BadgeCorner.Parent = TypeBadge
         
         local EventName = Instance.new("TextLabel")
-        EventName.Size = UDim2.new(1, -220, 0, 22)
-        EventName.Position = UDim2.new(0, 115, 0, 8)
+        EventName.Size = UDim2.new(1, -240, 0, 25)
+        EventName.Position = UDim2.new(0, 135, 0, 8)
         EventName.BackgroundTransparency = 1
         EventName.Text = event.Object.Name
         EventName.TextColor3 = Config.Theme.Text
         EventName.Font = Enum.Font.GothamBold
-        EventName.TextSize = 13
+        EventName.TextSize = 14
         EventName.TextXAlignment = Enum.TextXAlignment.Left
         EventName.TextTruncate = Enum.TextTruncate.AtEnd
         EventName.Parent = EventFrame
         
         local PathLabel = Instance.new("TextLabel")
-        PathLabel.Size = UDim2.new(1, -120, 0, 18)
-        PathLabel.Position = UDim2.new(0, 8, 0, 32)
+        PathLabel.Size = UDim2.new(1, -120, 0, 20)
+        PathLabel.Position = UDim2.new(0, 8, 0, 35)
         PathLabel.BackgroundTransparency = 1
-        PathLabel.Text = "📂 " .. event.Object:GetFullName()
+        PathLabel.Text = "📂 " .. event.Path
         PathLabel.TextColor3 = Config.Theme.TextSecondary
         PathLabel.Font = Enum.Font.Gotham
-        PathLabel.TextSize = 10
+        PathLabel.TextSize = 11
         PathLabel.TextXAlignment = Enum.TextXAlignment.Left
         PathLabel.TextTruncate = Enum.TextTruncate.AtEnd
         PathLabel.Parent = EventFrame
         
         local TimeLabel = Instance.new("TextLabel")
-        TimeLabel.Size = UDim2.new(0.5, -10, 0, 18)
-        TimeLabel.Position = UDim2.new(0, 8, 0, 50)
+        TimeLabel.Size = UDim2.new(0.5, -10, 0, 20)
+        TimeLabel.Position = UDim2.new(0, 8, 0, 55)
         TimeLabel.BackgroundTransparency = 1
         TimeLabel.Text = "⏰ " .. os.date("%H:%M:%S", event.Timestamp)
         TimeLabel.TextColor3 = Config.Theme.TextSecondary
         TimeLabel.Font = Enum.Font.Gotham
-        TimeLabel.TextSize = 10
+        TimeLabel.TextSize = 11
         TimeLabel.TextXAlignment = Enum.TextXAlignment.Left
         TimeLabel.Parent = EventFrame
         
         local ArgsLabel = Instance.new("TextLabel")
-        ArgsLabel.Size = UDim2.new(0.5, -10, 0, 25)
-        ArgsLabel.Position = UDim2.new(0, 8, 1, -30)
+        ArgsLabel.Size = UDim2.new(0.5, -10, 0, 20)
+        ArgsLabel.Position = UDim2.new(0, 8, 0, 75)
         ArgsLabel.BackgroundTransparency = 1
-        ArgsLabel.Text = string.format("📦 Argumentos: %d", #event.Arguments)
+        ArgsLabel.Text = string.format("📦 Args: %d", #event.Arguments)
         ArgsLabel.TextColor3 = Config.Theme.TextSecondary
         ArgsLabel.Font = Enum.Font.Gotham
-        ArgsLabel.TextSize = 10
+        ArgsLabel.TextSize = 11
         ArgsLabel.TextXAlignment = Enum.TextXAlignment.Left
         ArgsLabel.Parent = EventFrame
         
@@ -784,8 +810,8 @@ function UpdateEventsList()
             BlockedEvents[event.Object] and "🔓 Desbloquear" or "🔒 Bloquear",
             BlockedEvents[event.Object] and Config.Theme.Success or Config.Theme.Error,
             EventFrame,
-            UDim2.new(1, -180, 0, 8),
-            UDim2.new(0, 85, 0, 32)
+            UDim2.new(1, -185, 0, 8),
+            UDim2.new(0, 90, 0, 35)
         )
         
         local ReplayButton = CreateStyledButton(
@@ -793,15 +819,15 @@ function UpdateEventsList()
             Config.Theme.Primary,
             EventFrame,
             UDim2.new(1, -90, 0, 8),
-            UDim2.new(0, 85, 0, 32)
+            UDim2.new(0, 85, 0, 35)
         )
         
         local CopyButton = CreateStyledButton(
             "📋 Copiar",
             Config.Theme.Warning,
             EventFrame,
-            UDim2.new(1, -180, 0, 45),
-            UDim2.new(0, 175, 0, 32)
+            UDim2.new(1, -185, 0, 48),
+            UDim2.new(0, 180, 0, 35)
         )
         
         BlockButton.MouseButton1Click:Connect(function()
@@ -837,7 +863,7 @@ function UpdateEventsList()
             end
             
             local copyText = string.format("-- %s\n%s:%s(%s)", 
-                event.Object:GetFullName(), 
+                event.Path, 
                 event.Object.Name,
                 event.Type == "RemoteEvent" and "FireServer" or "InvokeServer",
                 argsString
@@ -858,23 +884,23 @@ function CreateEventLogsTab()
     Container.Parent = TabContent
     
     local ControlFrame = Instance.new("Frame")
-    ControlFrame.Size = UDim2.new(1, -20, 0, 45)
+    ControlFrame.Size = UDim2.new(1, -20, 0, 50)
     ControlFrame.Position = UDim2.new(0, 10, 0, 10)
     ControlFrame.BackgroundTransparency = 1
     ControlFrame.Parent = Container
     
-    local StartButton = CreateStyledButton("🟢 INICIAR CAPTURA", Config.Theme.Success, ControlFrame,
-        UDim2.new(0, 0, 0, 0), UDim2.new(0.31, 0, 1, 0))
+    local StartButton = CreateStyledButton("💜 INICIAR CAPTURA", Config.Theme.Success, ControlFrame,
+        UDim2.new(0, 0, 0, 0), UDim2.new(0.32, 0, 1, 0))
     
     local ClearButton = CreateStyledButton("🗑️ LIMPAR", Config.Theme.Error, ControlFrame,
-        UDim2.new(0.345, 0, 0, 0), UDim2.new(0.31, 0, 1, 0))
+        UDim2.new(0.34, 0, 0, 0), UDim2.new(0.32, 0, 1, 0))
     
     local ExportButton = CreateStyledButton("💾 EXPORTAR", Config.Theme.Primary, ControlFrame,
-        UDim2.new(0.69, 0, 0, 0), UDim2.new(0.31, 0, 1, 0))
+        UDim2.new(0.68, 0, 0, 0), UDim2.new(0.32, 0, 1, 0))
     
     local InfoFrame = Instance.new("Frame")
-    InfoFrame.Size = UDim2.new(1, -20, 0, 30)
-    InfoFrame.Position = UDim2.new(0, 10, 0, 65)
+    InfoFrame.Size = UDim2.new(1, -20, 0, 35)
+    InfoFrame.Position = UDim2.new(0, 10, 0, 70)
     InfoFrame.BackgroundColor3 = Config.Theme.Secondary
     InfoFrame.Parent = Container
     
@@ -886,19 +912,19 @@ function CreateEventLogsTab()
     EventsInfoLabel.Size = UDim2.new(1, -20, 1, 0)
     EventsInfoLabel.Position = UDim2.new(0, 10, 0, 0)
     EventsInfoLabel.BackgroundTransparency = 1
-    EventsInfoLabel.Text = "📊 Eventos Capturados: 0 | 🔒 Bloqueados: 0"
+    EventsInfoLabel.Text = "📊 Eventos: 0 | 🔒 Bloqueados: 0 | 💜 Hooked: 0"
     EventsInfoLabel.TextColor3 = Config.Theme.Text
-    EventsInfoLabel.Font = Enum.Font.Gotham
-    EventsInfoLabel.TextSize = 12
+    EventsInfoLabel.Font = Enum.Font.GothamBold
+    EventsInfoLabel.TextSize = 13
     EventsInfoLabel.TextXAlignment = Enum.TextXAlignment.Left
     EventsInfoLabel.Parent = InfoFrame
     
     EventsScrollFrame = Instance.new("ScrollingFrame")
-    EventsScrollFrame.Size = UDim2.new(1, -20, 1, -115)
-    EventsScrollFrame.Position = UDim2.new(0, 10, 0, 105)
+    EventsScrollFrame.Size = UDim2.new(1, -20, 1, -125)
+    EventsScrollFrame.Position = UDim2.new(0, 10, 0, 115)
     EventsScrollFrame.BackgroundColor3 = Config.Theme.Secondary
     EventsScrollFrame.BorderSizePixel = 0
-    EventsScrollFrame.ScrollBarThickness = 6
+    EventsScrollFrame.ScrollBarThickness = 8
     EventsScrollFrame.ScrollBarImageColor3 = Config.Theme.Primary
     EventsScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
     EventsScrollFrame.Parent = Container
@@ -909,7 +935,7 @@ function CreateEventLogsTab()
     
     local ListLayout = Instance.new("UIListLayout")
     ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    ListLayout.Padding = UDim.new(0, 8)
+    ListLayout.Padding = UDim.new(0, 10)
     ListLayout.Parent = EventsScrollFrame
     
     ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
@@ -922,29 +948,19 @@ function CreateEventLogsTab()
         if IsCapturing then
             StartButton.Text = "🔴 PARAR CAPTURA"
             StartButton.BackgroundColor3 = Config.Theme.Error
-            StatusLabel.Text = "🟢 Captura: ON"
+            StatusLabel.Text = "💜 Captura: ON"
             StatusLabel.BackgroundColor3 = Config.Theme.Success
             
             -- Hookar eventos existentes
             HookExistingRemotes()
             
-            -- Hookar novos eventos
-            local descendantAddedConnection
-            descendantAddedConnection = game.DescendantAdded:Connect(function(obj)
-                if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and not HookedObjects[obj] then
-                    pcall(function()
-                        HookRemoteEvent(obj)
-                    end)
-                end
-            end)
-            
-            table.insert(ConnectionsTable, descendantAddedConnection)
         else
-            StartButton.Text = "🟢 INICIAR CAPTURA"
+            StartButton.Text = "💜 INICIAR CAPTURA"
             StartButton.BackgroundColor3 = Config.Theme.Success
             StatusLabel.Text = "⚫ Captura: OFF"
             StatusLabel.BackgroundColor3 = Config.Theme.Surface
         end
+        UpdateEventsList()
     end)
     
     ClearButton.MouseButton1Click:Connect(function()
@@ -954,16 +970,16 @@ function CreateEventLogsTab()
     end)
     
     ExportButton.MouseButton1Click:Connect(function()
-        local exportData = "-- Exported Events Log\n-- Total Events: " .. #CapturedEvents .. "\n\n"
+        local exportData = "-- Purple Dump Panel - Event Logs\n-- Total Events: " .. #CapturedEvents .. "\n\n"
         for i, event in ipairs(CapturedEvents) do
             exportData = exportData .. string.format(
-                "-- [%d] %s (%s)\n-- Path: %s\n-- Time: %s\n-- Args: %s\n\n",
+                "-- [%d] %s (%s)\n-- Path: %s\n-- Time: %s\n-- Args Count: %d\n\n",
                 i,
                 event.Object.Name,
                 event.Type,
-                event.Object:GetFullName(),
+                event.Path,
                 os.date("%H:%M:%S", event.Timestamp),
-                HttpService:JSONEncode(event.Arguments)
+                #event.Arguments
             )
         end
         
@@ -976,7 +992,7 @@ function CreateEventLogsTab()
     UpdateEventsList()
 end
 
--- ABA KEY LOGS COMPLETAMENTE FUNCIONAL
+-- ABA KEY LOGS (similar à anterior, mas com tema roxo)
 function CreateKeyLogsTab()
     local Container = Instance.new("Frame")
     Container.Size = UDim2.new(1, 0, 1, 0)
@@ -984,7 +1000,7 @@ function CreateKeyLogsTab()
     Container.Parent = TabContent
     
     local ControlFrame = Instance.new("Frame")
-    ControlFrame.Size = UDim2.new(1, -20, 0, 45)
+    ControlFrame.Size = UDim2.new(1, -20, 0, 50)
     ControlFrame.Position = UDim2.new(0, 10, 0, 10)
     ControlFrame.BackgroundTransparency = 1
     ControlFrame.Parent = Container
@@ -996,22 +1012,22 @@ function CreateKeyLogsTab()
         UDim2.new(0.52, 0, 0, 0), UDim2.new(0.48, 0, 1, 0))
     
     local InfoLabel = Instance.new("TextLabel")
-    InfoLabel.Size = UDim2.new(1, -20, 0, 25)
-    InfoLabel.Position = UDim2.new(0, 10, 0, 65)
+    InfoLabel.Size = UDim2.new(1, -20, 0, 30)
+    InfoLabel.Position = UDim2.new(0, 10, 0, 70)
     InfoLabel.BackgroundTransparency = 1
     InfoLabel.Text = "⌨️ Key Logger Ativo - Todos os inputs estão sendo registrados"
     InfoLabel.TextColor3 = Config.Theme.Text
-    InfoLabel.Font = Enum.Font.Gotham
-    InfoLabel.TextSize = 12
+    InfoLabel.Font = Enum.Font.GothamBold
+    InfoLabel.TextSize = 13
     InfoLabel.TextXAlignment = Enum.TextXAlignment.Left
     InfoLabel.Parent = Container
     
     local ScrollFrame = Instance.new("ScrollingFrame")
-    ScrollFrame.Size = UDim2.new(1, -20, 1, -110)
-    ScrollFrame.Position = UDim2.new(0, 10, 0, 95)
+    ScrollFrame.Size = UDim2.new(1, -20, 1, -120)
+    ScrollFrame.Position = UDim2.new(0, 10, 0, 105)
     ScrollFrame.BackgroundColor3 = Config.Theme.Secondary
     ScrollFrame.BorderSizePixel = 0
-    ScrollFrame.ScrollBarThickness = 6
+    ScrollFrame.ScrollBarThickness = 8
     ScrollFrame.ScrollBarImageColor3 = Config.Theme.Primary
     ScrollFrame.Parent = Container
     
@@ -1023,7 +1039,7 @@ function CreateKeyLogsTab()
     LogBox.Size = UDim2.new(1, -20, 1, -20)
     LogBox.Position = UDim2.new(0, 10, 0, 10)
     LogBox.BackgroundTransparency = 1
-    LogBox.Text = "⌨️ Key Logger Iniciado...\nAguardando inputs...\n\n"
+    LogBox.Text = "💜 Purple Key Logger Iniciado...\nAguardando inputs...\n\n"
     LogBox.TextColor3 = Config.Theme.Text
     LogBox.Font = Enum.Font.Code
     LogBox.TextSize = 12
@@ -1032,10 +1048,10 @@ function CreateKeyLogsTab()
     LogBox.TextWrapped = true
     LogBox.Parent = ScrollFrame
     
-    -- Sistema de captura de input 100% funcional
+    -- Sistema de captura de input
     local function UpdateKeyLogsDisplay()
-        local displayText = "⌨️ KEY LOGS - Últimos 100 inputs:\n\n"
-        for i = 1, math.min(100, #KeyLogs) do
+        local displayText = "💜 KEY LOGS - Últimos 150 inputs:\n\n"
+        for i = 1, math.min(150, #KeyLogs) do
             displayText = displayText .. KeyLogs[i]
         end
         LogBox.Text = displayText
@@ -1062,9 +1078,9 @@ function CreateKeyLogsTab()
         end
         
         local logEntry = string.format(
-            "[%s] %s | %s | %s | GameProcessed: %s\n",
+            "[%s] %s | %s | %s | Game: %s\n",
             timestamp,
-            gameProcessed and "🔒" or "✅",
+            gameProcessed and "🔒" or "💜",
             inputType,
             keyName,
             tostring(gameProcessed)
@@ -1087,7 +1103,7 @@ function CreateKeyLogsTab()
     end)
     
     ExportButton.MouseButton1Click:Connect(function()
-        local exportText = "-- Key Logs Export\n-- Total Inputs: " .. #KeyLogs .. "\n\n"
+        local exportText = "-- Purple Key Logs\n-- Total Inputs: " .. #KeyLogs .. "\n\n"
         for i = #KeyLogs, 1, -1 do
             exportText = exportText .. KeyLogs[i]
         end
@@ -1099,41 +1115,41 @@ function CreateKeyLogsTab()
     end)
 end
 
--- ABA EXECUTOR (mantida similar)
+-- ABA EXECUTOR
 function CreateCodeExecutorTab()
     local Container = Instance.new("Frame")
     Container.Size = UDim2.new(1, 0, 1, 0)
     Container.BackgroundTransparency = 1
     Container.Parent = TabContent
     
-    local CodeBox = CreateStyledTextBox("-- Code Executor\n-- Cole seu código Lua aqui\n\nprint('Hello from Advanced Panel v4.0!')", 
+    local CodeBox = CreateStyledTextBox("-- Purple Executor\n-- Cole seu código Lua aqui\n\nprint('💜 Hello from Purple Panel v5.0!')", 
         Container, UDim2.new(0, 10, 0, 10), UDim2.new(1, -20, 0.55, -15), true)
     
     local ButtonFrame = Instance.new("Frame")
-    ButtonFrame.Size = UDim2.new(1, -20, 0, 45)
+    ButtonFrame.Size = UDim2.new(1, -20, 0, 50)
     ButtonFrame.Position = UDim2.new(0, 10, 0.55, 5)
     ButtonFrame.BackgroundTransparency = 1
     ButtonFrame.Parent = Container
     
-    local ExecuteButton = CreateStyledButton("▶️ EXECUTAR", Config.Theme.Success, ButtonFrame,
+    local ExecuteButton = CreateStyledButton("💜 EXECUTAR", Config.Theme.Success, ButtonFrame,
         UDim2.new(0, 0, 0, 0), UDim2.new(0.48, 0, 1, 0))
     
     local ClearButton = CreateStyledButton("🗑️ LIMPAR", Config.Theme.Error, ButtonFrame,
         UDim2.new(0.52, 0, 0, 0), UDim2.new(0.48, 0, 1, 0))
     
     local OutputLabel = Instance.new("TextLabel")
-    OutputLabel.Size = UDim2.new(1, -20, 0, 25)
-    OutputLabel.Position = UDim2.new(0, 10, 0.55, 60)
+    OutputLabel.Size = UDim2.new(1, -20, 0, 30)
+    OutputLabel.Position = UDim2.new(0, 10, 0.55, 65)
     OutputLabel.BackgroundTransparency = 1
     OutputLabel.Text = "📤 Output:"
     OutputLabel.TextColor3 = Config.Theme.Text
     OutputLabel.Font = Enum.Font.GothamBold
-    OutputLabel.TextSize = 13
+    OutputLabel.TextSize = 14
     OutputLabel.TextXAlignment = Enum.TextXAlignment.Left
     OutputLabel.Parent = Container
     
     local OutputBox = CreateStyledTextBox("Aguardando execução...", 
-        Container, UDim2.new(0, 10, 0.55, 90), UDim2.new(1, -20, 0.45, -100), true)
+        Container, UDim2.new(0, 10, 0.55, 100), UDim2.new(1, -20, 0.45, -110), true)
     OutputBox.TextEditable = false
     OutputBox.TextColor3 = Color3.fromRGB(0, 255, 100)
     
@@ -1161,7 +1177,7 @@ function CreateCodeExecutorTab()
             local timestamp = os.date("%H:%M:%S")
             
             if success then
-                OutputBox.Text = string.format("✅ [%s] SUCESSO - Código executado\n", timestamp)
+                OutputBox.Text = string.format("💜 [%s] SUCESSO - Código executado\n", timestamp)
                 if result ~= nil then
                     OutputBox.Text = OutputBox.Text .. "📦 Retorno: " .. tostring(result) .. "\n"
                 end
@@ -1170,7 +1186,7 @@ function CreateCodeExecutorTab()
             end
             
             task.wait(0.5)
-            ExecuteButton.Text = "▶️ EXECUTAR"
+            ExecuteButton.Text = "💜 EXECUTAR"
             ExecuteButton.BackgroundColor3 = Config.Theme.Success
         end)
     end)
@@ -1181,7 +1197,7 @@ function CreateCodeExecutorTab()
     end)
 end
 
--- ABA SETTINGS (mantida similar)
+-- ABA SETTINGS
 function CreateSettingsTab()
     local Container = Instance.new("Frame")
     Container.Size = UDim2.new(1, 0, 1, 0)
@@ -1193,7 +1209,7 @@ function CreateSettingsTab()
     ScrollFrame.Position = UDim2.new(0, 10, 0, 10)
     ScrollFrame.BackgroundTransparency = 1
     ScrollFrame.BorderSizePixel = 0
-    ScrollFrame.ScrollBarThickness = 6
+    ScrollFrame.ScrollBarThickness = 8
     ScrollFrame.ScrollBarImageColor3 = Config.Theme.Primary
     ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 600)
     ScrollFrame.Parent = Container
@@ -1202,48 +1218,48 @@ function CreateSettingsTab()
     
     local function CreateOption(title, description, callback, isToggled)
         local OptionFrame = Instance.new("Frame")
-        OptionFrame.Size = UDim2.new(1, -10, 0, 70)
+        OptionFrame.Size = UDim2.new(1, -10, 0, 80)
         OptionFrame.Position = UDim2.new(0, 0, 0, yPos)
         OptionFrame.BackgroundColor3 = Config.Theme.Surface
         OptionFrame.BorderSizePixel = 0
         OptionFrame.Parent = ScrollFrame
         
         local OptionCorner = Instance.new("UICorner")
-        OptionCorner.CornerRadius = UDim.new(0, 8)
+        OptionCorner.CornerRadius = UDim.new(0, 10)
         OptionCorner.Parent = OptionFrame
         
         local TitleLabel = Instance.new("TextLabel")
-        TitleLabel.Size = UDim2.new(1, -100, 0, 20)
+        TitleLabel.Size = UDim2.new(1, -100, 0, 25)
         TitleLabel.Position = UDim2.new(0, 15, 0, 10)
         TitleLabel.BackgroundTransparency = 1
         TitleLabel.Text = title
         TitleLabel.TextColor3 = Config.Theme.Text
         TitleLabel.Font = Enum.Font.GothamBold
-        TitleLabel.TextSize = 14
+        TitleLabel.TextSize = 15
         TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
         TitleLabel.Parent = OptionFrame
         
         local DescLabel = Instance.new("TextLabel")
-        DescLabel.Size = UDim2.new(1, -100, 0, 35)
-        DescLabel.Position = UDim2.new(0, 15, 0, 30)
+        DescLabel.Size = UDim2.new(1, -100, 0, 40)
+        DescLabel.Position = UDim2.new(0, 15, 0, 35)
         DescLabel.BackgroundTransparency = 1
         DescLabel.Text = description
         DescLabel.TextColor3 = Config.Theme.TextSecondary
         DescLabel.Font = Enum.Font.Gotham
-        DescLabel.TextSize = 11
+        DescLabel.TextSize = 12
         DescLabel.TextXAlignment = Enum.TextXAlignment.Left
         DescLabel.TextYAlignment = Enum.TextYAlignment.Top
         DescLabel.TextWrapped = true
         DescLabel.Parent = OptionFrame
         
         local ToggleButton = Instance.new("TextButton")
-        ToggleButton.Size = UDim2.new(0, 70, 0, 35)
-        ToggleButton.Position = UDim2.new(1, -85, 0.5, -17.5)
+        ToggleButton.Size = UDim2.new(0, 80, 0, 40)
+        ToggleButton.Position = UDim2.new(1, -90, 0.5, -20)
         ToggleButton.BackgroundColor3 = isToggled and Config.Theme.Success or Config.Theme.Error
-        ToggleButton.Text = isToggled and "✓ ON" or "✕ OFF"
+        ToggleButton.Text = isToggled and "💜 ON" or "✕ OFF"
         ToggleButton.TextColor3 = Config.Theme.Text
         ToggleButton.Font = Enum.Font.GothamBold
-        ToggleButton.TextSize = 12
+        ToggleButton.TextSize = 13
         ToggleButton.AutoButtonColor = false
         ToggleButton.Parent = OptionFrame
         
@@ -1254,15 +1270,15 @@ function CreateSettingsTab()
         ToggleButton.MouseButton1Click:Connect(function()
             isToggled = not isToggled
             ToggleButton.BackgroundColor3 = isToggled and Config.Theme.Success or Config.Theme.Error
-            ToggleButton.Text = isToggled and "✓ ON" or "✕ OFF"
+            ToggleButton.Text = isToggled and "💜 ON" or "✕ OFF"
             callback(isToggled)
         end)
         
-        yPos = yPos + 80
+        yPos = yPos + 90
     end
     
     CreateOption(
-        "🔄 Auto Hook",
+        "💜 Auto Hook",
         "Hookar automaticamente novos RemoteEvents/Functions",
         function(value) Config.AutoHook = value end,
         Config.AutoHook
@@ -1290,38 +1306,38 @@ function CreateSettingsTab()
     )
     
     local InfoFrame = Instance.new("Frame")
-    InfoFrame.Size = UDim2.new(1, -10, 0, 120)
+    InfoFrame.Size = UDim2.new(1, -10, 0, 140)
     InfoFrame.Position = UDim2.new(0, 0, 0, yPos)
     InfoFrame.BackgroundColor3 = Config.Theme.Primary
-    InfoFrame.BorderSizePixel = 0
     InfoFrame.Parent = ScrollFrame
     
     local InfoCorner = Instance.new("UICorner")
-    InfoCorner.CornerRadius = UDim.new(0, 8)
+    InfoCorner.CornerRadius = UDim.new(0, 10)
     InfoCorner.Parent = InfoFrame
     
     local InfoText = Instance.new("TextLabel")
     InfoText.Size = UDim2.new(1, -20, 1, -20)
     InfoText.Position = UDim2.new(0, 10, 0, 10)
     InfoText.BackgroundTransparency = 1
-    InfoText.Text = [[📖 Informações & Controles:
+    InfoText.Text = [[💜 Purple Dump Panel v5.0
 
-• Pressione F para abrir/fechar o painel
-• Use as abas para navegar entre funcionalidades
-• Todos os logs são salvos em memória
-• Para melhor performance, limpe logs regularmente]]
+• Pressione F para abrir/fechar
+• Dump REAL salva arquivos no PC
+• Trigger 100% funcional
+• Tema roxo/preto premium
+• Compatível com Xeno Executor]]
     InfoText.TextColor3 = Config.Theme.Text
-    InfoText.Font = Enum.Font.Gotham
-    InfoText.TextSize = 12
+    InfoText.Font = Enum.Font.GothamBold
+    InfoText.TextSize = 13
     InfoText.TextXAlignment = Enum.TextXAlignment.Left
     InfoText.TextYAlignment = Enum.TextYAlignment.Top
     InfoText.TextWrapped = true
     InfoText.Parent = InfoFrame
     
-    yPos = yPos + 130
+    yPos = yPos + 150
     
     local ResetButton = CreateStyledButton("⚠️ RESETAR TUDO", Config.Theme.Error, ScrollFrame,
-        UDim2.new(0, 0, 0, yPos), UDim2.new(1, -10, 0, 45))
+        UDim2.new(0, 0, 0, yPos), UDim2.new(1, -10, 0, 50))
     
     ResetButton.MouseButton1Click:Connect(function()
         CapturedEvents = {}
@@ -1348,12 +1364,12 @@ local function ToggleUI()
         MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
         
         TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-            Size = UDim2.new(0, 800, 0, 600),
-            Position = UDim2.new(0.5, -400, 0.5, -300)
+            Size = UDim2.new(0, 840, 0, 640),
+            Position = UDim2.new(0.5, -420, 0.5, -320)
         }):Play()
         
         TweenService:Create(Shadow, TweenInfo.new(0.3), {
-            BackgroundTransparency = 0.7
+            BackgroundTransparency = 0.8
         }):Play()
         
         SwitchTab(CurrentTab)
@@ -1388,7 +1404,7 @@ MinimizeButton.MouseButton1Click:Connect(ToggleUI)
 
 -- Criar abas
 local tabs = {
-    {name = "Dump", icon = "📁"},
+    {name = "Dump", icon = "💜"},
     {name = "Event Logs", icon = "📡"},
     {name = "Key Logs", icon = "⌨️"},
     {name = "Executor", icon = "⚡"},
@@ -1405,14 +1421,14 @@ SwitchTab("Dump")
 -- Notificação de inicialização
 local function ShowNotification(text, duration)
     local NotifFrame = Instance.new("Frame")
-    NotifFrame.Size = UDim2.new(0, 300, 0, 60)
-    NotifFrame.Position = UDim2.new(1, -310, 1, -70)
-    NotifFrame.BackgroundColor3 = Config.Theme.Success
+    NotifFrame.Size = UDim2.new(0, 350, 0, 70)
+    NotifFrame.Position = UDim2.new(1, -360, 1, -80)
+    NotifFrame.BackgroundColor3 = Config.Theme.Primary
     NotifFrame.BorderSizePixel = 0
     NotifFrame.Parent = ScreenGui
     
     local NotifCorner = Instance.new("UICorner")
-    NotifCorner.CornerRadius = UDim.new(0, 10)
+    NotifCorner.CornerRadius = UDim.new(0, 12)
     NotifCorner.Parent = NotifFrame
     
     local NotifText = Instance.new("TextLabel")
@@ -1422,39 +1438,40 @@ local function ShowNotification(text, duration)
     NotifText.Text = text
     NotifText.TextColor3 = Config.Theme.Text
     NotifText.Font = Enum.Font.GothamBold
-    NotifText.TextSize = 13
+    NotifText.TextSize = 14
     NotifText.TextWrapped = true
     NotifText.Parent = NotifFrame
     
     TweenService:Create(NotifFrame, TweenInfo.new(0.3), {
-        Position = UDim2.new(1, -310, 1, -80)
+        Position = UDim2.new(1, -360, 1, -90)
     }):Play()
     
-    task.wait(duration or 3)
+    task.wait(duration or 4)
     
     TweenService:Create(NotifFrame, TweenInfo.new(0.3), {
-        Position = UDim2.new(1, -310, 1, 0)
+        Position = UDim2.new(1, -360, 1, 0)
     }):Play()
     
     task.wait(0.3)
     NotifFrame:Destroy()
 end
 
-ShowNotification("🎮 Advanced Dump Panel v4.0\n✅ Carregado! Pressione F", 4)
+ShowNotification("💜 Purple Dump Panel v5.0\n✅ Carregado! Pressione F\n🔧 Dump REAL + Trigger 100%", 5)
 
 print("╔═════════════════════════════════════════╗")
-print("║   Advanced Dump Panel v4.0              ║")
+print("║   💜 Purple Dump Panel v5.0             ║")
 print("║   ✅ Carregado com sucesso!             ║")
 print("║   📌 Pressione F para abrir/fechar      ║")
-print("║   🔧 Dump REAL + Logs 100% funcionais   ║")
+print("║   🔧 Dump REAL + Trigger 100%           ║")
+print("║   🎨 Tema roxo/preto premium            ║")
 print("╚═════════════════════════════════════════╝")
 
 -- Auto-inicialização do hook se configurado
 if Config.AutoHook then
     task.spawn(function()
-        task.wait(2)
+        task.wait(3)
         HookExistingRemotes()
-        print("🔗 Auto-hook inicializado: " .. tostring(#HookedObjects) .. " objetos hookados")
+        print("💜 Auto-hook inicializado: " .. tostring(#HookedObjects) .. " objetos hookados")
     end)
 end
 
@@ -1462,8 +1479,8 @@ end
 game:GetService("Players").PlayerRemoving:Connect(function(player)
     if player == LocalPlayer then
         for _, connection in pairs(ConnectionsTable) do
-            connection:Disconnect()
+            pcall(function() connection:Disconnect() end)
         end
-        ScreenGui:Destroy()
+        pcall(function() ScreenGui:Destroy() end)
     end
 end)
