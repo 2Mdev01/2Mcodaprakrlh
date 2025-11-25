@@ -568,7 +568,7 @@ SwitchTab("Dump")
 
 -- Notificação inicial
 print("🎮 Advanced Dump Panel Carregado!")
-print("📢 Pressione F para abrir/fechar o painel")
+print("📢 Pressione FFFFFFFFFFFFF para abrir/fechar o painel")
 print("🔧 Desenvolvido para análise e debugging")
 
 -- Função de utilidade para salvar logs
