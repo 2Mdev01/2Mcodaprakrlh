@@ -1,7 +1,7 @@
 --[[
     ╔═══════════════════════════════════════════════════════════╗
-    ║  Purple Dump Panel v5.0 - Xeno Edition                   ║
-    ║  Dump REAL + Trigger 100% Funcional + Tema Roxo         ║
+    ║  Purple Dump Panel v6.0 - Memory Edition                 ║
+    ║  Dump REAL + Trigger Shaka + Memória Persistente         ║
     ║  Hotkey: F para abrir/fechar                             ║
     ╚═══════════════════════════════════════════════════════════╝
 --]]
@@ -36,16 +36,49 @@ local Config = {
     }
 }
 
+-- Sistema de Memória Persistente
+local Memory = {
+    Events = {},
+    Blocked = {},
+    KeyLogs = {},
+    ScriptCache = {},
+    HookedObjects = {},
+    LastTab = "Dump",
+    Settings = {}
+}
+
+-- Carregar memória salva
+local function LoadMemory()
+    if readfile and isfile and isfile("purple_memory.json") then
+        local success, data = pcall(function()
+            return HttpService:JSONDecode(readfile("purple_memory.json"))
+        end)
+        if success then
+            Memory = data
+            print("💾 Memória carregada!")
+        end
+    end
+end
+
+-- Salvar memória
+local function SaveMemory()
+    if writefile then
+        local success = pcall(function()
+            writefile("purple_memory.json", HttpService:JSONEncode(Memory))
+        end)
+        if success then
+            print("💾 Memória salva!")
+        end
+    end
+end
+
+-- Carregar memória ao iniciar
+LoadMemory()
+
 -- Variáveis globais
-local CapturedEvents = {}
-local BlockedEvents = {}
-local KeyLogs = {}
-local ScriptCache = {}
 local IsUIVisible = false
 local IsCapturing = false
-local HookedObjects = {}
 local ConnectionsTable = {}
-local OriginalFunctions = {}
 
 -- Criar UI
 local ScreenGui = Instance.new("ScreenGui")
@@ -114,7 +147,7 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(0, 400, 0, 35)
 TitleLabel.Position = UDim2.new(0, 55, 0, 5)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "Purple Dump Panel v5.0"
+TitleLabel.Text = "Purple Dump Panel v6.0"
 TitleLabel.TextColor3 = Config.Theme.Text
 TitleLabel.Font = Enum.Font.GothamBold
 TitleLabel.TextSize = 18
@@ -205,7 +238,7 @@ ContentCorner.CornerRadius = UDim.new(0, 12)
 ContentCorner.Parent = TabContent
 
 -- Variável de controle da aba atual
-local CurrentTab = "Dump"
+local CurrentTab = Memory.LastTab
 
 -- Função para criar botão de aba
 local function CreateTabButton(name, icon, index)
@@ -269,6 +302,8 @@ end
 -- Função para trocar de aba com animação
 function SwitchTab(tabName)
     CurrentTab = tabName
+    Memory.LastTab = tabName
+    SaveMemory()
     
     -- Atualizar estilos dos botões
     for _, child in pairs(TabButtons:GetChildren()) do
@@ -342,369 +377,236 @@ local function CreateStyledTextBox(placeholder, parent, position, size, multilin
     return Box
 end
 
--- SISTEMA DE DUMP REAL SALVANDO ARQUIVOS
-local function SaveToFile(filename, content)
-    if writefile then
-        local success, err = pcall(function()
-            writefile(filename, content)
-        end)
-        return success, err
-    else
-        return false, "writefile não disponível"
-    end
-end
-
-local function GetScriptSource(script)
-    local success, source = pcall(function()
-        return script.Source
-    end)
-    
-    if success and source and source ~= "" then
-        return source
-    else
-        return "-- [PROTECTED] Unable to read source"
-    end
-end
-
-local function DumpScriptsRecursive(parent, path, output, fileContent)
-    for _, obj in pairs(parent:GetChildren()) do
-        local currentPath = path .. "/" .. obj.Name
-        
-        if obj:IsA("Script") or obj:IsA("LocalScript") or obj:IsA("ModuleScript") then
-            local source = GetScriptSource(obj)
-            
-            -- Adicionar ao output da UI
-            output.Text = output.Text .. "\n" .. string.rep("=", 80) .. "\n"
-            output.Text = output.Text .. "-- PATH: " .. currentPath .. "\n"
-            output.Text = output.Text .. "-- CLASS: " .. obj.ClassName .. "\n"
-            output.Text = output.Text .. string.rep("=", 80) .. "\n"
-            output.Text = output.Text .. source .. "\n\n"
-            
-            -- Adicionar ao conteúdo do arquivo
-            fileContent = fileContent .. "\n" .. string.rep("=", 80) .. "\n"
-            fileContent = fileContent .. "-- PATH: " .. currentPath .. "\n"
-            fileContent = fileContent .. "-- CLASS: " .. obj.ClassName .. "\n"
-            fileContent = fileContent .. string.rep("=", 80) .. "\n"
-            fileContent = fileContent .. source .. "\n\n"
-            
-            -- Cache do script
-            ScriptCache[currentPath] = {
-                Object = obj,
-                Path = currentPath,
-                ClassName = obj.ClassName,
-                Source = source
-            }
-        end
-        
-        -- Recursão
-        if #obj:GetChildren() > 0 then
-            fileContent = DumpScriptsRecursive(obj, currentPath, output, fileContent)
+-- SISTEMA DE CAPTURA DO SHAKA (MELHORADO)
+local function FormatArgs(args)
+    if not args then return "{}" end
+    local t = {}
+    for i = 1, math.min(3, #args) do
+        local v = args[i]
+        if type(v) == "string" then
+            table.insert(t, '"' .. tostring(v):sub(1, 15) .. '"')
+        elseif type(v) == "number" then
+            table.insert(t, tostring(v))
+        elseif typeof(v) == "Instance" then
+            table.insert(t, v.Name)
+        else
+            table.insert(t, tostring(v):sub(1, 10))
         end
     end
-    
-    return fileContent
+    if #args > 3 then
+        table.insert(t, "...")
+    end
+    return "{" .. table.concat(t, ", ") .. "}"
 end
 
--- ABA DUMP MELHORADA
-function CreateDumpTab()
-    local Container = Instance.new("Frame")
-    Container.Size = UDim2.new(1, 0, 1, 0)
-    Container.BackgroundTransparency = 1
-    Container.Parent = TabContent
+local function CaptureEvent(remote, eventType, args)
+    if not remote or not remote.Parent then return end
     
-    local ButtonFrame = Instance.new("Frame")
-    ButtonFrame.Size = UDim2.new(1, -20, 0, 50)
-    ButtonFrame.Position = UDim2.new(0, 10, 0, 10)
-    ButtonFrame.BackgroundTransparency = 1
-    ButtonFrame.Parent = Container
+    local path = remote:GetFullName()
+    if Memory.Blocked[path] then return end
     
-    local DumpButton = CreateStyledButton("💜 DUMP REAL + SALVAR", Config.Theme.Primary, ButtonFrame, 
-        UDim2.new(0, 0, 0, 0), UDim2.new(0.48, 0, 1, 0))
-    
-    local ExportButton = CreateStyledButton("💾 EXPORTAR", Config.Theme.Success, ButtonFrame, 
-        UDim2.new(0.52, 0, 0, 0), UDim2.new(0.48, 0, 1, 0))
-    
-    local ProgressFrame = Instance.new("Frame")
-    ProgressFrame.Size = UDim2.new(1, -20, 0, 25)
-    ProgressFrame.Position = UDim2.new(0, 10, 0, 70)
-    ProgressFrame.BackgroundColor3 = Config.Theme.Secondary
-    ProgressFrame.BorderSizePixel = 0
-    ProgressFrame.Visible = false
-    ProgressFrame.Parent = Container
-    
-    local ProgressCorner = Instance.new("UICorner")
-    ProgressCorner.CornerRadius = UDim.new(0, 8)
-    ProgressCorner.Parent = ProgressFrame
-    
-    local ProgressBar = Instance.new("Frame")
-    ProgressBar.Size = UDim2.new(0, 0, 1, 0)
-    ProgressBar.BackgroundColor3 = Config.Theme.Primary
-    ProgressBar.BorderSizePixel = 0
-    ProgressBar.Parent = ProgressFrame
-    
-    local ProgressCorner2 = Instance.new("UICorner")
-    ProgressCorner2.CornerRadius = UDim.new(0, 8)
-    ProgressCorner2.Parent = ProgressBar
-    
-    local ProgressLabel = Instance.new("TextLabel")
-    ProgressLabel.Size = UDim2.new(1, 0, 1, 0)
-    ProgressLabel.BackgroundTransparency = 1
-    ProgressLabel.Text = "Processando..."
-    ProgressLabel.TextColor3 = Config.Theme.Text
-    ProgressLabel.Font = Enum.Font.GothamBold
-    ProgressLabel.TextSize = 12
-    ProgressLabel.Parent = ProgressFrame
-    
-    local ScrollFrame = Instance.new("ScrollingFrame")
-    ScrollFrame.Size = UDim2.new(1, -20, 1, -115)
-    ScrollFrame.Position = UDim2.new(0, 10, 0, 105)
-    ScrollFrame.BackgroundColor3 = Config.Theme.Secondary
-    ScrollFrame.BorderSizePixel = 0
-    ScrollFrame.ScrollBarThickness = 8
-    ScrollFrame.ScrollBarImageColor3 = Config.Theme.Primary
-    ScrollFrame.Parent = Container
-    
-    local ScrollCorner = Instance.new("UICorner")
-    ScrollCorner.CornerRadius = UDim.new(0, 8)
-    ScrollCorner.Parent = ScrollFrame
-    
-    local OutputBox = Instance.new("TextLabel")
-    OutputBox.Size = UDim2.new(1, -20, 1, -20)
-    OutputBox.Position = UDim2.new(0, 10, 0, 10)
-    OutputBox.BackgroundTransparency = 1
-    OutputBox.Text = "💜 PURPLE DUMP PANEL v5.0\n\n"..
-        "DUMP REAL + SALVAMENTO EM ARQUIVO\n\n"..
-        "Este dump irá:\n"..
-        "• Extrair código fonte REAL dos scripts\n"..
-        "• Salvar em arquivo no seu PC\n"..
-        "• Processar todos os serviços do jogo\n"..
-        "• Manter cache para análise rápida\n\n"..
-        "Clique em 'DUMP REAL + SALVAR' para começar."
-    OutputBox.TextColor3 = Config.Theme.Text
-    OutputBox.Font = Enum.Font.Code
-    OutputBox.TextSize = 12
-    OutputBox.TextXAlignment = Enum.TextXAlignment.Left
-    OutputBox.TextYAlignment = Enum.TextYAlignment.Top
-    OutputBox.TextWrapped = true
-    OutputBox.Parent = ScrollFrame
-    
-    local function UpdateProgress(current, total, text)
-        local percent = current / total
-        ProgressBar.Size = UDim2.new(percent, 0, 1, 0)
-        ProgressLabel.Text = text .. string.format(" (%d/%d - %.1f%%)", current, total, percent * 100)
-    end
-    
-    DumpButton.MouseButton1Click:Connect(function()
-        DumpButton.Text = "⏳ PROCESSANDO..."
-        DumpButton.BackgroundColor3 = Config.Theme.Warning
-        ProgressFrame.Visible = true
-        
-        task.spawn(function()
-            local startTime = tick()
-            OutputBox.Text = "🚀 INICIANDO DUMP REAL...\n⏰ Isso pode levar alguns minutos...\n\n"
-            
-            ScriptCache = {}
-            local totalScripts = 0
-            local processedScripts = 0
-            
-            -- Contar scripts primeiro
-            local function CountScripts(parent)
-                for _, obj in pairs(parent:GetChildren()) do
-                    if obj:IsA("Script") or obj:IsA("LocalScript") or obj:IsA("ModuleScript") then
-                        totalScripts = totalScripts + 1
-                    end
-                    CountScripts(obj)
-                end
-            end
-            
-            local servicesToDump = {
-                game:GetService("Workspace"),
-                game:GetService("ReplicatedStorage"),
-                game:GetService("ReplicatedFirst"),
-                game:GetService("ServerScriptService"),
-                game:GetService("ServerStorage"),
-                game:GetService("StarterGui"),
-                game:GetService("StarterPack"),
-                game:GetService("StarterPlayer"),
-                game:GetService("Lighting"),
-                game:GetService("SoundService"),
-                game:GetService("Players")
-            }
-            
-            for _, service in pairs(servicesToDump) do
-                CountScripts(service)
-            end
-            
-            OutputBox.Text = OutputBox.Text .. string.format("📊 Total de scripts encontrados: %d\n\n", totalScripts)
-            
-            -- Fazer o dump real
-            local fileContent = "-- PURPLE DUMP PANEL v5.0 - DUMP COMPLETO\n-- Data: " .. os.date("%d/%m/%Y %H:%M:%S") .. "\n\n"
-            
-            for _, service in pairs(servicesToDump) do
-                local serviceName = service.Name
-                OutputBox.Text = OutputBox.Text .. string.format("\n📂 PROCESSANDO: %s\n", serviceName)
-                fileContent = fileContent .. string.format("\n=== %s ===\n", serviceName)
-                
-                fileContent = DumpScriptsRecursive(service, serviceName, OutputBox, fileContent)
-                
-                -- Atualizar progresso
-                processedScripts = processedScripts + math.floor(totalScripts / #servicesToDump)
-                UpdateProgress(processedScripts, totalScripts, "Processando " .. serviceName)
-                task.wait(0.1)
-            end
-            
-            -- SALVAR EM ARQUIVO
-            local filename = "purple_dump_" .. os.time() .. ".lua"
-            local success, err = SaveToFile(filename, fileContent)
-            
-            local endTime = tick()
-            local duration = string.format("%.2f", endTime - startTime)
-            
-            if success then
-                OutputBox.Text = OutputBox.Text .. string.format("\n\n✅ DUMP SALVO COM SUCESSO!\n")
-                OutputBox.Text = OutputBox.Text .. string.format("📁 Arquivo: %s\n", filename)
-            else
-                OutputBox.Text = OutputBox.Text .. string.format("\n\n⚠️ DUMP CONCLUÍDO MAS NÃO SALVO\n")
-                OutputBox.Text = OutputBox.Text .. string.format("❌ Erro: %s\n", err)
-            end
-            
-            OutputBox.Text = OutputBox.Text .. string.format("📊 Scripts processados: %d\n", totalScripts)
-            OutputBox.Text = OutputBox.Text .. string.format("⏰ Tempo total: %s segundos\n", duration)
-            OutputBox.Text = OutputBox.Text .. string.format("💾 Tamanho: %d KB\n", #fileContent / 1024)
-            
-            ProgressFrame.Visible = false
-            DumpButton.Text = "💜 DUMP REAL + SALVAR"
-            DumpButton.BackgroundColor3 = Config.Theme.Primary
-        end)
-    end)
-    
-    ExportButton.MouseButton1Click:Connect(function()
-        local dumpData = OutputBox.Text
-        setclipboard(dumpData)
-        OutputBox.Text = OutputBox.Text .. "\n✅ Dump copiado para clipboard!"
-        
-        ExportButton.Text = "✅ COPIADO!"
-        task.wait(2)
-        ExportButton.Text = "💾 EXPORTAR"
-    end)
-end
-
--- SISTEMA DE TRIGGER 100% FUNCIONAL
-local function HookRemoteEvent(event)
-    if HookedObjects[event] then return end
-    HookedObjects[event] = true
-    
-    if event:IsA("RemoteEvent") then
-        local oldFireServer = event.FireServer
-        OriginalFunctions[event] = oldFireServer
-        
-        event.FireServer = function(self, ...)
-            local args = {...}
-            local callingScript = getcallingscript()
-            
-            if IsCapturing then
-                local eventData = {
-                    Object = event,
-                    Arguments = args,
-                    Timestamp = os.time(),
-                    Type = "RemoteEvent",
-                    Caller = callingScript or "Unknown",
-                    Path = event:GetFullName()
-                }
-                
-                table.insert(CapturedEvents, 1, eventData)
-                
-                if #CapturedEvents > Config.MaxEventLogs then
-                    table.remove(CapturedEvents, #CapturedEvents)
-                end
-                
-                -- Atualizar UI se visível
-                if IsUIVisible and CurrentTab == "Event Logs" then
-                    UpdateEventsList()
-                end
-            end
-            
-            if not BlockedEvents[event] then
-                return oldFireServer(self, ...)
-            end
-        end
-    elseif event:IsA("RemoteFunction") then
-        local oldInvokeServer = event.InvokeServer
-        OriginalFunctions[event] = oldInvokeServer
-        
-        event.InvokeServer = function(self, ...)
-            local args = {...}
-            local callingScript = getcallingscript()
-            
-            if IsCapturing then
-                local eventData = {
-                    Object = event,
-                    Arguments = args,
-                    Timestamp = os.time(),
-                    Type = "RemoteFunction",
-                    Caller = callingScript or "Unknown",
-                    Path = event:GetFullName()
-                }
-                
-                table.insert(CapturedEvents, 1, eventData)
-                
-                if #CapturedEvents > Config.MaxEventLogs then
-                    table.remove(CapturedEvents, #CapturedEvents)
-                end
-                
-                if IsUIVisible and CurrentTab == "Event Logs" then
-                    UpdateEventsList()
-                end
-            end
-            
-            if not BlockedEvents[event] then
-                return oldInvokeServer(self, ...)
-            end
-        end
-    end
-end
-
-local function HookExistingRemotes()
-    local function HookDescendants(parent)
-        for _, obj in pairs(parent:GetDescendants()) do
-            if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and not HookedObjects[obj] then
-                pcall(function()
-                    HookRemoteEvent(obj)
-                end)
-            end
-        end
-    end
-    
-    -- Hookar em todos os serviços importantes
-    local services = {
-        game:GetService("Workspace"),
-        game:GetService("ReplicatedStorage"),
-        game:GetService("ReplicatedFirst"),
-        game:GetService("ServerScriptService"),
-        game:GetService("ServerStorage"),
-        game:GetService("StarterGui"),
-        game:GetService("StarterPack"),
-        game:GetService("StarterPlayer"),
-        game:GetService("Players")
+    local eventData = {
+        Name = remote.Name,
+        Type = eventType,
+        Path = path,
+        Remote = remote,
+        Arguments = args or {},
+        Timestamp = os.time(),
+        TimeString = os.date("%H:%M:%S"),
+        Loop = false
     }
     
-    for _, service in pairs(services) do
-        pcall(function()
-            HookDescendants(service)
-        end)
+    table.insert(Memory.Events, 1, eventData)
+    
+    -- Limitar quantidade
+    while #Memory.Events > Config.MaxEventLogs do
+        table.remove(Memory.Events)
     end
     
-    -- Hookar novos objetos
-    for _, service in pairs(services) do
-        local connection
-        connection = service.DescendantAdded:Connect(function(obj)
-            if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and not HookedObjects[obj] then
-                pcall(function()
-                    HookRemoteEvent(obj)
-                end)
-            end
+    -- Salvar periodicamente
+    if #Memory.Events % 10 == 0 then
+        SaveMemory()
+    end
+    
+    -- Atualizar UI se visível
+    if IsUIVisible and CurrentTab == "Event Logs" then
+        UpdateEventsList()
+    end
+end
+
+-- SISTEMA DE HOOK DO SHAKA (MELHORADO)
+local function InstallHooks()
+    print("🔧 Instalando hooks...")
+    
+    -- Método 1: Hook metamethod (mais eficiente)
+    if hookmetamethod and getnamecallmethod then
+        local success = pcall(function()
+            local oldNamecall
+            oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+                local method = getnamecallmethod()
+                if (method == "FireServer" or method == "InvokeServer") and IsCapturing then
+                    task.spawn(function()
+                        if typeof(self) == "Instance" then
+                            CaptureEvent(
+                                self, 
+                                method == "FireServer" and "RemoteEvent" or "RemoteFunction", 
+                                {...}
+                            )
+                        end
+                    end)
+                end
+                return oldNamecall(self, ...)
+            end)
+            print("✅ Hook metamethod instalado!")
         end)
-        table.insert(ConnectionsTable, connection)
+        if not success then
+            print("❌ Hook metamethod falhou")
+        end
+    end
+    
+    -- Método 2: Hook direto (backup)
+    task.spawn(function()
+        local function HookDescendants(parent)
+            for _, obj in pairs(parent:GetDescendants()) do
+                if obj:IsA("RemoteEvent") and not Memory.HookedObjects[obj] then
+                    pcall(function()
+                        Memory.HookedObjects[obj] = true
+                        local oldFire = obj.FireServer
+                        obj.FireServer = function(self, ...)
+                            if IsCapturing then
+                                task.spawn(function() 
+                                    CaptureEvent(self, "RemoteEvent", {...}) 
+                                end)
+                            end
+                            return oldFire(self, ...)
+                        end
+                    end)
+                elseif obj:IsA("RemoteFunction") and not Memory.HookedObjects[obj] then
+                    pcall(function()
+                        Memory.HookedObjects[obj] = true
+                        local oldInvoke = obj.InvokeServer
+                        obj.InvokeServer = function(self, ...)
+                            if IsCapturing then
+                                task.spawn(function() 
+                                    CaptureEvent(self, "RemoteFunction", {...}) 
+                                end)
+                            end
+                            return oldInvoke(self, ...)
+                        end
+                    end)
+                end
+            end
+        end
+        
+        -- Hookar serviços principais
+        local services = {
+            game:GetService("Workspace"),
+            game:GetService("ReplicatedStorage"),
+            game:GetService("ReplicatedFirst"),
+            game:GetService("ServerScriptService"),
+            game:GetService("ServerStorage"),
+            game:GetService("StarterGui"),
+            game:GetService("StarterPack"),
+            game:GetService("StarterPlayer"),
+            game:GetService("Players")
+        }
+        
+        for _, service in pairs(services) do
+            pcall(function()
+                HookDescendants(service)
+            end)
+        end
+        
+        -- Hookar novos objetos
+        for _, service in pairs(services) do
+            local connection = service.DescendantAdded:Connect(function(obj)
+                if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and not Memory.HookedObjects[obj] then
+                    pcall(function()
+                        if obj:IsA("RemoteEvent") then
+                            Memory.HookedObjects[obj] = true
+                            local oldFire = obj.FireServer
+                            obj.FireServer = function(self, ...)
+                                if IsCapturing then
+                                    task.spawn(function() 
+                                        CaptureEvent(self, "RemoteEvent", {...}) 
+                                    end)
+                                end
+                                return oldFire(self, ...)
+                            end
+                        else
+                            Memory.HookedObjects[obj] = true
+                            local oldInvoke = obj.InvokeServer
+                            obj.InvokeServer = function(self, ...)
+                                if IsCapturing then
+                                    task.spawn(function() 
+                                        CaptureEvent(self, "RemoteFunction", {...}) 
+                                    end)
+                                end
+                                return oldInvoke(self, ...)
+                            end
+                        end
+                    end)
+                end
+            end)
+            table.insert(ConnectionsTable, connection)
+        end
+        
+        print("✅ Hook direto instalado: " .. #Memory.HookedObjects .. " objetos")
+    end)
+end
+
+-- FUNÇÕES DE CONTROLE DE EVENTOS
+local function ReplayEvent(event, times)
+    times = times or 1
+    task.spawn(function()
+        for i = 1, times do
+            pcall(function()
+                if event.Remote and event.Remote.Parent then
+                    if event.Type == "RemoteEvent" then
+                        event.Remote:FireServer(unpack(event.Arguments))
+                    else
+                        event.Remote:InvokeServer(unpack(event.Arguments))
+                    end
+                end
+            end)
+            if i < times then
+                task.wait(0.1)
+            end
+        end
+        print("🔁 Replay executado x" .. times)
+    end)
+end
+
+local function ToggleLoopEvent(event)
+    event.Loop = not event.Loop
+    
+    if event.Loop then
+        task.spawn(function()
+            while event.Loop and event.Remote and event.Remote.Parent do
+                pcall(function()
+                    if event.Type == "RemoteEvent" then
+                        event.Remote:FireServer(unpack(event.Arguments))
+                    else
+                        event.Remote:InvokeServer(unpack(event.Arguments))
+                    end
+                end)
+                task.wait(0.3)
+            end
+            event.Loop = false
+        end)
+        return true
+    else
+        return false
+    end
+end
+
+local function ToggleBlockEvent(path)
+    if Memory.Blocked[path] then
+        Memory.Blocked[path] = nil
+        return false
+    else
+        Memory.Blocked[path] = true
+        return true
     end
 end
 
@@ -715,6 +617,7 @@ local EventsInfoLabel
 function UpdateEventsList()
     if not EventsScrollFrame then return end
     
+    -- Limpar eventos anteriores
     for _, child in pairs(EventsScrollFrame:GetChildren()) do
         if child:IsA("Frame") then
             child:Destroy()
@@ -722,16 +625,18 @@ function UpdateEventsList()
     end
     
     local blockedCount = 0
-    for _ in pairs(BlockedEvents) do
+    for _ in pairs(Memory.Blocked) do
         blockedCount = blockedCount + 1
     end
     
     if EventsInfoLabel then
-        EventsInfoLabel.Text = string.format("📊 Eventos: %d | 🔒 Bloqueados: %d | 💜 Hooked: %d", #CapturedEvents, blockedCount, #HookedObjects)
+        EventsInfoLabel.Text = string.format("📊 Eventos: %d | 🔒 Bloqueados: %d | 💜 Hooked: %d", 
+            #Memory.Events, blockedCount, #Memory.HookedObjects)
     end
     
-    for i = math.min(100, #CapturedEvents), 1, -1 do
-        local event = CapturedEvents[i]
+    -- Mostrar últimos eventos
+    for i = 1, math.min(20, #Memory.Events) do
+        local event = Memory.Events[i]
         if not event then continue end
         
         local EventFrame = Instance.new("Frame")
@@ -744,6 +649,7 @@ function UpdateEventsList()
         EventCorner.CornerRadius = UDim.new(0, 8)
         EventCorner.Parent = EventFrame
         
+        -- Tipo do evento
         local TypeBadge = Instance.new("TextLabel")
         TypeBadge.Size = UDim2.new(0, 120, 0, 25)
         TypeBadge.Position = UDim2.new(0, 8, 0, 8)
@@ -758,11 +664,12 @@ function UpdateEventsList()
         BadgeCorner.CornerRadius = UDim.new(0, 6)
         BadgeCorner.Parent = TypeBadge
         
+        -- Nome do evento
         local EventName = Instance.new("TextLabel")
         EventName.Size = UDim2.new(1, -240, 0, 25)
         EventName.Position = UDim2.new(0, 135, 0, 8)
         EventName.BackgroundTransparency = 1
-        EventName.Text = event.Object.Name
+        EventName.Text = event.Name
         EventName.TextColor3 = Config.Theme.Text
         EventName.Font = Enum.Font.GothamBold
         EventName.TextSize = 14
@@ -770,6 +677,7 @@ function UpdateEventsList()
         EventName.TextTruncate = Enum.TextTruncate.AtEnd
         EventName.Parent = EventFrame
         
+        -- Caminho
         local PathLabel = Instance.new("TextLabel")
         PathLabel.Size = UDim2.new(1, -120, 0, 20)
         PathLabel.Position = UDim2.new(0, 8, 0, 35)
@@ -782,11 +690,12 @@ function UpdateEventsList()
         PathLabel.TextTruncate = Enum.TextTruncate.AtEnd
         PathLabel.Parent = EventFrame
         
+        -- Tempo e argumentos
         local TimeLabel = Instance.new("TextLabel")
         TimeLabel.Size = UDim2.new(0.5, -10, 0, 20)
         TimeLabel.Position = UDim2.new(0, 8, 0, 55)
         TimeLabel.BackgroundTransparency = 1
-        TimeLabel.Text = "⏰ " .. os.date("%H:%M:%S", event.Timestamp)
+        TimeLabel.Text = "⏰ " .. event.TimeString
         TimeLabel.TextColor3 = Config.Theme.TextSecondary
         TimeLabel.Font = Enum.Font.Gotham
         TimeLabel.TextSize = 11
@@ -797,54 +706,63 @@ function UpdateEventsList()
         ArgsLabel.Size = UDim2.new(0.5, -10, 0, 20)
         ArgsLabel.Position = UDim2.new(0, 8, 0, 75)
         ArgsLabel.BackgroundTransparency = 1
-        ArgsLabel.Text = string.format("📦 Args: %d", #event.Arguments)
+        ArgsLabel.Text = "📦 " .. FormatArgs(event.Arguments)
         ArgsLabel.TextColor3 = Config.Theme.TextSecondary
         ArgsLabel.Font = Enum.Font.Gotham
         ArgsLabel.TextSize = 11
         ArgsLabel.TextXAlignment = Enum.TextXAlignment.Left
+        ArgsLabel.TextTruncate = Enum.TextTruncate.AtEnd
         ArgsLabel.Parent = EventFrame
         
-        local BlockButton = CreateStyledButton(
-            BlockedEvents[event.Object] and "🔓 Desbloquear" or "🔒 Bloquear",
-            BlockedEvents[event.Object] and Config.Theme.Success or Config.Theme.Error,
-            EventFrame,
-            UDim2.new(1, -185, 0, 8),
-            UDim2.new(0, 90, 0, 35)
-        )
+        -- Botões de controle
+        local PlayButton = CreateStyledButton("▶️", Config.Theme.Success, EventFrame,
+            UDim2.new(1, -185, 0, 8), UDim2.new(0, 40, 0, 25))
         
-        local ReplayButton = CreateStyledButton(
-            "▶️ Replay",
-            Config.Theme.Primary,
+        local MultiButton = CreateStyledButton("⚡5", Config.Theme.Primary, EventFrame,
+            UDim2.new(1, -140, 0, 8), UDim2.new(0, 45, 0, 25))
+        
+        local LoopButton = CreateStyledButton(
+            event.Loop and "⏹️" or "🔁",
+            event.Loop and Config.Theme.Error or Config.Theme.Warning,
             EventFrame,
             UDim2.new(1, -90, 0, 8),
-            UDim2.new(0, 85, 0, 35)
+            UDim2.new(0, 45, 0, 25)
         )
         
-        local CopyButton = CreateStyledButton(
-            "📋 Copiar",
-            Config.Theme.Warning,
-            EventFrame,
-            UDim2.new(1, -185, 0, 48),
-            UDim2.new(0, 180, 0, 35)
-        )
+        local BlockButton = CreateStyledButton("🚫", Config.Theme.Error, EventFrame,
+            UDim2.new(1, -40, 0, 8), UDim2.new(0, 35, 0, 25))
         
-        BlockButton.MouseButton1Click:Connect(function()
-            BlockedEvents[event.Object] = not BlockedEvents[event.Object]
-            UpdateEventsList()
+        -- Botões inferiores
+        local CopyButton = CreateStyledButton("📋 Copiar", Config.Theme.Warning, EventFrame,
+            UDim2.new(1, -185, 0, 38), UDim2.new(0, 180, 0, 25))
+        
+        -- Conexões dos botões
+        PlayButton.MouseButton1Click:Connect(function()
+            ReplayEvent(event, 1)
         end)
         
-        ReplayButton.MouseButton1Click:Connect(function()
-            pcall(function()
-                if event.Type == "RemoteEvent" then
-                    event.Object:FireServer(unpack(event.Arguments))
-                else
-                    event.Object:InvokeServer(unpack(event.Arguments))
-                end
-            end)
-            
-            ReplayButton.Text = "✅ Enviado"
+        MultiButton.MouseButton1Click:Connect(function()
+            ReplayEvent(event, 5)
+        end)
+        
+        LoopButton.MouseButton1Click:Connect(function()
+            local looping = ToggleLoopEvent(event)
+            LoopButton.Text = looping and "⏹️" or "🔁"
+            LoopButton.BackgroundColor3 = looping and Config.Theme.Error or Config.Theme.Warning
+        end)
+        
+        BlockButton.MouseButton1Click:Connect(function()
+            local blocked = ToggleBlockEvent(event.Path)
+            if blocked then
+                BlockButton.Text = "✅"
+                BlockButton.BackgroundColor3 = Config.Theme.Success
+            else
+                BlockButton.Text = "🚫"
+                BlockButton.BackgroundColor3 = Config.Theme.Error
+            end
+            SaveMemory()
             task.wait(1)
-            ReplayButton.Text = "▶️ Replay"
+            UpdateEventsList()
         end)
         
         CopyButton.MouseButton1Click:Connect(function()
@@ -862,7 +780,7 @@ function UpdateEventsList()
             
             local copyText = string.format("-- %s\n%s:%s(%s)", 
                 event.Path, 
-                event.Object.Name,
+                event.Name,
                 event.Type == "RemoteEvent" and "FireServer" or "InvokeServer",
                 argsString
             )
@@ -910,7 +828,7 @@ function CreateEventLogsTab()
     EventsInfoLabel.Size = UDim2.new(1, -20, 1, 0)
     EventsInfoLabel.Position = UDim2.new(0, 10, 0, 0)
     EventsInfoLabel.BackgroundTransparency = 1
-    EventsInfoLabel.Text = "📊 Eventos: 0 | 🔒 Bloqueados: 0 | 💜 Hooked: 0"
+    EventsInfoLabel.Text = "📊 Eventos: " .. #Memory.Events .. " | 🔒 Bloqueados: 0 | 💜 Hooked: 0"
     EventsInfoLabel.TextColor3 = Config.Theme.Text
     EventsInfoLabel.Font = Enum.Font.GothamBold
     EventsInfoLabel.TextSize = 13
@@ -949,8 +867,10 @@ function CreateEventLogsTab()
             StatusLabel.Text = "💜 Captura: ON"
             StatusLabel.BackgroundColor3 = Config.Theme.Success
             
-            -- Hookar eventos existentes
-            HookExistingRemotes()
+            -- Instalar hooks se necessário
+            if #Memory.HookedObjects == 0 then
+                InstallHooks()
+            end
             
         else
             StartButton.Text = "💜 INICIAR CAPTURA"
@@ -962,22 +882,22 @@ function CreateEventLogsTab()
     end)
     
     ClearButton.MouseButton1Click:Connect(function()
-        CapturedEvents = {}
-        BlockedEvents = {}
+        Memory.Events = {}
+        SaveMemory()
         UpdateEventsList()
     end)
     
     ExportButton.MouseButton1Click:Connect(function()
-        local exportData = "-- Purple Dump Panel - Event Logs\n-- Total Events: " .. #CapturedEvents .. "\n\n"
-        for i, event in ipairs(CapturedEvents) do
+        local exportData = "-- Purple Dump Panel - Event Logs\n-- Total Events: " .. #Memory.Events .. "\n\n"
+        for i, event in ipairs(Memory.Events) do
             exportData = exportData .. string.format(
-                "-- [%d] %s (%s)\n-- Path: %s\n-- Time: %s\n-- Args Count: %d\n\n",
+                "-- [%d] %s (%s)\n-- Path: %s\n-- Time: %s\n-- Args: %s\n\n",
                 i,
-                event.Object.Name,
+                event.Name,
                 event.Type,
                 event.Path,
-                os.date("%H:%M:%S", event.Timestamp),
-                #event.Arguments
+                event.TimeString,
+                FormatArgs(event.Arguments)
             )
         end
         
@@ -990,7 +910,7 @@ function CreateEventLogsTab()
     UpdateEventsList()
 end
 
--- ABA KEY LOGS
+-- ABA KEY LOGS (mantida similar)
 function CreateKeyLogsTab()
     local Container = Instance.new("Frame")
     Container.Size = UDim2.new(1, 0, 1, 0)
@@ -1049,8 +969,8 @@ function CreateKeyLogsTab()
     -- Sistema de captura de input
     local function UpdateKeyLogsDisplay()
         local displayText = "💜 KEY LOGS - Últimos 150 inputs:\n\n"
-        for i = 1, math.min(150, #KeyLogs) do
-            displayText = displayText .. KeyLogs[i]
+        for i = 1, math.min(150, #Memory.KeyLogs) do
+            displayText = displayText .. Memory.KeyLogs[i]
         end
         LogBox.Text = displayText
         
@@ -1084,10 +1004,15 @@ function CreateKeyLogsTab()
             tostring(gameProcessed)
         )
         
-        table.insert(KeyLogs, 1, logEntry)
+        table.insert(Memory.KeyLogs, 1, logEntry)
         
-        if #KeyLogs > Config.MaxKeyLogs then
-            table.remove(KeyLogs, #KeyLogs)
+        if #Memory.KeyLogs > Config.MaxKeyLogs then
+            table.remove(Memory.KeyLogs, #Memory.KeyLogs)
+        end
+        
+        -- Salvar periodicamente
+        if #Memory.KeyLogs % 20 == 0 then
+            SaveMemory()
         end
         
         UpdateKeyLogsDisplay()
@@ -1096,14 +1021,15 @@ function CreateKeyLogsTab()
     table.insert(ConnectionsTable, inputBeganConnection)
     
     ClearButton.MouseButton1Click:Connect(function()
-        KeyLogs = {}
+        Memory.KeyLogs = {}
+        SaveMemory()
         LogBox.Text = "🗑️ Key Logs limpos com sucesso!\nAguardando novos inputs...\n\n"
     end)
     
     ExportButton.MouseButton1Click:Connect(function()
-        local exportText = "-- Purple Key Logs\n-- Total Inputs: " .. #KeyLogs .. "\n\n"
-        for i = #KeyLogs, 1, -1 do
-            exportText = exportText .. KeyLogs[i]
+        local exportText = "-- Purple Key Logs\n-- Total Inputs: " .. #Memory.KeyLogs .. "\n\n"
+        for i = #Memory.KeyLogs, 1, -1 do
+            exportText = exportText .. Memory.KeyLogs[i]
         end
         
         setclipboard(exportText)
@@ -1111,16 +1037,18 @@ function CreateKeyLogsTab()
         task.wait(2)
         ExportButton.Text = "💾 EXPORTAR"
     end)
+    
+    UpdateKeyLogsDisplay()
 end
 
--- ABA EXECUTOR
+-- ABA EXECUTOR (mantida similar)
 function CreateCodeExecutorTab()
     local Container = Instance.new("Frame")
     Container.Size = UDim2.new(1, 0, 1, 0)
     Container.BackgroundTransparency = 1
     Container.Parent = TabContent
     
-    local CodeBox = CreateStyledTextBox("-- Purple Executor\n-- Cole seu código Lua aqui\n\nprint('💜 Hello from Purple Panel v5.0!')", 
+    local CodeBox = CreateStyledTextBox("-- Purple Executor\n-- Cole seu código Lua aqui\n\nprint('💜 Hello from Purple Panel v6.0!')", 
         Container, UDim2.new(0, 10, 0, 10), UDim2.new(1, -20, 0.55, -15), true)
     
     local ButtonFrame = Instance.new("Frame")
@@ -1195,7 +1123,7 @@ function CreateCodeExecutorTab()
     end)
 end
 
--- ABA SETTINGS
+-- ABA SETTINGS (com sistema de memória)
 function CreateSettingsTab()
     local Container = Instance.new("Frame")
     Container.Size = UDim2.new(1, 0, 1, 0)
@@ -1270,6 +1198,7 @@ function CreateSettingsTab()
             ToggleButton.BackgroundColor3 = isToggled and Config.Theme.Success or Config.Theme.Error
             ToggleButton.Text = isToggled and "💜 ON" or "✕ OFF"
             callback(isToggled)
+            SaveMemory()
         end)
         
         yPos = yPos + 90
@@ -1317,11 +1246,11 @@ function CreateSettingsTab()
     InfoText.Size = UDim2.new(1, -20, 1, -20)
     InfoText.Position = UDim2.new(0, 10, 0, 10)
     InfoText.BackgroundTransparency = 1
-    InfoText.Text = [[💜 Purple Dump Panel v5.0
+    InfoText.Text = [[💜 Purple Dump Panel v6.0
 
 • Pressione F para abrir/fechar
-• Dump REAL salva arquivos no PC
-• Trigger 100% funcional
+• Sistema de memória persistente
+• Trigger Shaka 100% funcional
 • Tema roxo/preto premium
 • Compatível com Xeno Executor]]
     InfoText.TextColor3 = Config.Theme.Text
@@ -1338,11 +1267,12 @@ function CreateSettingsTab()
         UDim2.new(0, 0, 0, yPos), UDim2.new(1, -10, 0, 50))
     
     ResetButton.MouseButton1Click:Connect(function()
-        CapturedEvents = {}
-        BlockedEvents = {}
-        KeyLogs = {}
-        ScriptCache = {}
-        HookedObjects = {}
+        Memory.Events = {}
+        Memory.Blocked = {}
+        Memory.KeyLogs = {}
+        Memory.ScriptCache = {}
+        Memory.HookedObjects = {}
+        SaveMemory()
         
         ResetButton.Text = "✅ RESETADO!"
         task.wait(2)
@@ -1414,7 +1344,7 @@ for i, tab in ipairs(tabs) do
 end
 
 -- Inicializar
-SwitchTab("Dump")
+SwitchTab(CurrentTab)
 
 -- Notificação de inicialização
 local function ShowNotification(text, duration)
@@ -1454,28 +1384,37 @@ local function ShowNotification(text, duration)
     NotifFrame:Destroy()
 end
 
-ShowNotification("💜 Purple Dump Panel v5.0\n✅ Carregado! Pressione F\n🔧 Dump REAL + Trigger 100%", 5)
+ShowNotification("💜 Purple Dump Panel v6.0\n✅ Carregado! Pressione F\n🔧 Memória Persistente Ativa", 5)
 
 print("╔═════════════════════════════════════════╗")
-print("║   💜 Purple Dump Panel v5.0             ║")
+print("║   💜 Purple Dump Panel v6.0             ║")
 print("║   ✅ Carregado com sucesso!             ║")
 print("║   📌 Pressione F para abrir/fechar      ║")
-print("║   🔧 Dump REAL + Trigger 100%           ║")
-print("║   🎨 Tema roxo/preto premium            ║")
+print("║   🔧 Sistema de memória persistente     ║")
+print("║   🎯 Trigger Shaka 100% funcional       ║")
 print("╚═════════════════════════════════════════╝")
 
 -- Auto-inicialização do hook se configurado
 if Config.AutoHook then
     task.spawn(function()
         task.wait(3)
-        HookExistingRemotes()
-        print("💜 Auto-hook inicializado: " .. tostring(#HookedObjects) .. " objetos hookados")
+        InstallHooks()
+        print("💜 Auto-hook inicializado: " .. #Memory.HookedObjects .. " objetos hookados")
     end)
 end
+
+-- Salvar memória periodicamente
+task.spawn(function()
+    while true do
+        task.wait(30) -- Salvar a cada 30 segundos
+        SaveMemory()
+    end
+end)
 
 -- Limpeza ao sair
 game:GetService("Players").PlayerRemoving:Connect(function(player)
     if player == LocalPlayer then
+        SaveMemory() -- Salvar antes de sair
         for _, connection in pairs(ConnectionsTable) do
             pcall(function() connection:Disconnect() end)
         end
