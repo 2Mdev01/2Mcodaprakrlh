@@ -14,8 +14,6 @@ local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-local TeleportService = game:GetService("TeleportService")
 
 -- Configurações com tema ROXO/PRETO
 local Config = {
@@ -101,15 +99,6 @@ local TitleCorner = Instance.new("UICorner")
 TitleCorner.CornerRadius = UDim.new(0, 15)
 TitleCorner.Parent = TitleBar
 
--- Gradiente na barra de título
-local TitleGradient = Instance.new("UIGradient")
-TitleGradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Config.Theme.Primary),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(126, 34, 206))
-})
-TitleGradient.Rotation = 45
-TitleGradient.Parent = TitleBar
-
 -- Ícone e título
 local TitleIcon = Instance.new("TextLabel")
 TitleIcon.Size = UDim2.new(0, 35, 0, 35)
@@ -146,6 +135,41 @@ StatusLabel.Parent = TitleBar
 local StatusCorner = Instance.new("UICorner")
 StatusCorner.CornerRadius = UDim.new(0, 12)
 StatusCorner.Parent = StatusLabel
+
+-- Função auxiliar para criar botões estilizados
+local function CreateStyledButton(text, color, parent, position, size)
+    local Button = Instance.new("TextButton")
+    Button.Size = size or UDim2.new(0.45, 0, 0, 40)
+    Button.Position = position or UDim2.new(0, 0, 0, 0)
+    Button.BackgroundColor3 = color
+    Button.Text = text
+    Button.TextColor3 = Config.Theme.Text
+    Button.Font = Enum.Font.GothamBold
+    Button.TextSize = 14
+    Button.AutoButtonColor = false
+    Button.Parent = parent
+    
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 8)
+    Corner.Parent = Button
+    
+    -- Efeito hover
+    Button.MouseEnter:Connect(function()
+        TweenService:Create(Button, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.new(
+                math.min(color.R + 0.1, 1),
+                math.min(color.G + 0.1, 1),
+                math.min(color.B + 0.1, 1)
+            )
+        }):Play()
+    end)
+    
+    Button.MouseLeave:Connect(function()
+        TweenService:Create(Button, TweenInfo.new(0.2), {BackgroundColor3 = color}):Play()
+    end)
+    
+    return Button
+end
 
 -- Botões de controle
 local MinimizeButton = CreateStyledButton("─", Config.Theme.Warning, TitleBar, UDim2.new(1, -120, 0, 5), UDim2.new(0, 35, 0, 35))
@@ -223,7 +247,7 @@ local function CreateTabButton(name, icon, index)
     TextLabel.Parent = Button
     
     Button.MouseButton1Click:Connect(function()
-        SwitchTab(name, Button, IconLabel, TextLabel)
+        SwitchTab(name)
     end)
     
     -- Efeito hover
@@ -239,11 +263,11 @@ local function CreateTabButton(name, icon, index)
         end
     end)
     
-    return Button, IconLabel, TextLabel
+    return Button
 end
 
 -- Função para trocar de aba com animação
-function SwitchTab(tabName, button, icon, text)
+function SwitchTab(tabName)
     CurrentTab = tabName
     
     -- Atualizar estilos dos botões
@@ -285,43 +309,8 @@ function SwitchTab(tabName, button, icon, text)
     end
 end
 
--- Função auxiliar para criar botões estilizados
-function CreateStyledButton(text, color, parent, position, size)
-    local Button = Instance.new("TextButton")
-    Button.Size = size or UDim2.new(0.45, 0, 0, 40)
-    Button.Position = position or UDim2.new(0, 0, 0, 0)
-    Button.BackgroundColor3 = color
-    Button.Text = text
-    Button.TextColor3 = Config.Theme.Text
-    Button.Font = Enum.Font.GothamBold
-    Button.TextSize = 14
-    Button.AutoButtonColor = false
-    Button.Parent = parent
-    
-    local Corner = Instance.new("UICorner")
-    Corner.CornerRadius = UDim.new(0, 8)
-    Corner.Parent = Button
-    
-    -- Efeito hover
-    Button.MouseEnter:Connect(function()
-        TweenService:Create(Button, TweenInfo.new(0.2), {
-            BackgroundColor3 = Color3.new(
-                math.min(color.R + 0.1, 1),
-                math.min(color.G + 0.1, 1),
-                math.min(color.B + 0.1, 1)
-            )
-        }):Play()
-    end)
-    
-    Button.MouseLeave:Connect(function()
-        TweenService:Create(Button, TweenInfo.new(0.2), {BackgroundColor3 = color}):Play()
-    end)
-    
-    return Button
-end
-
 -- Função auxiliar para criar caixas de texto estilizadas
-function CreateStyledTextBox(placeholder, parent, position, size, multiline)
+local function CreateStyledTextBox(placeholder, parent, position, size, multiline)
     local Box = Instance.new("TextBox")
     Box.Size = size or UDim2.new(0.95, 0, 0, 400)
     Box.Position = position or UDim2.new(0.025, 0, 0, 60)
@@ -479,16 +468,25 @@ function CreateDumpTab()
     ScrollCorner.CornerRadius = UDim.new(0, 8)
     ScrollCorner.Parent = ScrollFrame
     
-    local OutputBox = CreateStyledTextBox("💜 PURPLE DUMP PANEL v5.0\n\n"..
+    local OutputBox = Instance.new("TextLabel")
+    OutputBox.Size = UDim2.new(1, -20, 1, -20)
+    OutputBox.Position = UDim2.new(0, 10, 0, 10)
+    OutputBox.BackgroundTransparency = 1
+    OutputBox.Text = "💜 PURPLE DUMP PANEL v5.0\n\n"..
         "DUMP REAL + SALVAMENTO EM ARQUIVO\n\n"..
         "Este dump irá:\n"..
         "• Extrair código fonte REAL dos scripts\n"..
         "• Salvar em arquivo no seu PC\n"..
         "• Processar todos os serviços do jogo\n"..
         "• Manter cache para análise rápida\n\n"..
-        "Clique em 'DUMP REAL + SALVAR' para começar.", 
-        ScrollFrame, UDim2.new(0, 5, 0, 5), UDim2.new(1, -10, 1, -10), true)
-    OutputBox.TextEditable = false
+        "Clique em 'DUMP REAL + SALVAR' para começar."
+    OutputBox.TextColor3 = Config.Theme.Text
+    OutputBox.Font = Enum.Font.Code
+    OutputBox.TextSize = 12
+    OutputBox.TextXAlignment = Enum.TextXAlignment.Left
+    OutputBox.TextYAlignment = Enum.TextYAlignment.Top
+    OutputBox.TextWrapped = true
+    OutputBox.Parent = ScrollFrame
     
     local function UpdateProgress(current, total, text)
         local percent = current / total
@@ -992,7 +990,7 @@ function CreateEventLogsTab()
     UpdateEventsList()
 end
 
--- ABA KEY LOGS (similar à anterior, mas com tema roxo)
+-- ABA KEY LOGS
 function CreateKeyLogsTab()
     local Container = Instance.new("Frame")
     Container.Size = UDim2.new(1, 0, 1, 0)
