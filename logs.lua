@@ -4,7 +4,7 @@ local _ = nil
 wait(2)
 
 print("=================================")
-print("SHAKA LOGGER v3.0 Iniciando...")
+print("SHAKA sLOGGER v3.0 Iniciando...")
 print("=================================")
 
 wait(1)
