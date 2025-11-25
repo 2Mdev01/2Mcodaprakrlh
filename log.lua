@@ -1,6 +1,6 @@
 --[[
     Painel de Dump e Monitoramento para Roblox
-    Funcionalidades: Dump de scripts, logs de eventos, bloqueio, replay e executor de código
+    Funcionalawdawdadawdidades: Dump de scripts, logs de eventos, bloqueio, replay e executor de código
     Controle: F para abrir/fechar
 --]]
 
